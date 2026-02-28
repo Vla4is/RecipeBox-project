@@ -1,0 +1,46 @@
+# Ignore all node_modules in any folder
+node_modules/
+
+# Build folders
+dist/
+build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.iml
+
+# Editor directories and files
+.DS_Store
+Thumbs.db
+
+# Cache
+.eslintcache
+.cache/
+.vite/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Build artifacts
+dist/
+dist-ssr/
+*.local
+
+# Temporary files
+.tmp/temp/
