@@ -3,14 +3,14 @@ import express, { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import initializeDatabase from "./db-init";
 import { createUser, authenticateUser } from "./services/userService";
-import { getPublicRecipes, createRecipe, getRecipeDetails } from "./services/recipeService";
+import { getPublicRecipes, createRecipe, getRecipeDetails, getUserRecipes, updateRecipe, deleteRecipe, getRecipeDetailsForOwner } from "./services/recipeService";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // JWT auth middleware
 interface AuthRequest extends Request {
@@ -95,6 +95,7 @@ app.post("/api/recipes", requireAuth, async (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: "title is required" });
     }
     const recipe = await createRecipe({
+      userid: req.user!.userid,
       title: title.trim(),
       description: description || undefined,
       image_url: image_url || undefined,
@@ -110,6 +111,78 @@ app.post("/api/recipes", requireAuth, async (req: AuthRequest, res: Response) =>
     return res.status(201).json({ recipe });
   } catch (err) {
     console.error("Create recipe error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get current user's recipes
+app.get("/api/my-recipes", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipes = await getUserRecipes(req.user!.userid);
+    return res.json({ recipes });
+  } catch (err) {
+    console.error("Error fetching user recipes:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get full details of a user's own recipe (for editing)
+app.get("/api/my-recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipeId = req.params.recipeId as string;
+    const details = await getRecipeDetailsForOwner(recipeId, req.user!.userid);
+    if (!details) {
+      return res.status(404).json({ error: "Recipe not found or not yours" });
+    }
+    return res.json(details);
+  } catch (err) {
+    console.error("Error fetching own recipe details:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Update a recipe (authenticated, owner only)
+app.put("/api/recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipeId = req.params.recipeId as string;
+    const { title, description, image_url, prepTimeMin, cookTimeMin, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
+    if (!title || typeof title !== "string" || title.trim().length === 0) {
+      return res.status(400).json({ error: "title is required" });
+    }
+    const recipe = await updateRecipe(recipeId, req.user!.userid, {
+      title: title.trim(),
+      description: description || undefined,
+      image_url: image_url || undefined,
+      prepTimeMin: prepTimeMin ? Number(prepTimeMin) : undefined,
+      cookTimeMin: cookTimeMin ? Number(cookTimeMin) : undefined,
+      servings: servings ? Number(servings) : undefined,
+      difficulty: difficulty || undefined,
+      visibility: visibility || "PUBLIC",
+      steps: steps || [],
+      ingredients: ingredients || [],
+      tags: tags || [],
+    });
+    if (!recipe) {
+      return res.status(404).json({ error: "Recipe not found or not yours" });
+    }
+    return res.json({ recipe });
+  } catch (err) {
+    console.error("Update recipe error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Delete a recipe (authenticated, owner only)
+app.delete("/api/recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipeId = req.params.recipeId as string;
+    const deleted = await deleteRecipe(recipeId, req.user!.userid);
+    if (!deleted) {
+      return res.status(404).json({ error: "Recipe not found or not yours" });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Delete recipe error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

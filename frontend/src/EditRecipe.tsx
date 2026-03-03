@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams, Link } from "react-router-dom";
 import "./App.css";
 
 const DIFFICULTY_OPTIONS = ["EASY", "MEDIUM", "HARD"] as const;
@@ -18,8 +18,9 @@ interface Ingredient {
   notes: string;
 }
 
-export default function AddRecipe({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
+export default function EditRecipe({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
   const navigate = useNavigate();
+  const { recipeId } = useParams<{ recipeId: string }>();
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -35,9 +36,64 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
     { name: "", amount: "", unit: "G", notes: "" },
   ]);
   const [tags, setTags] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+
+  // Load existing recipe data
+  useEffect(() => {
+    if (!recipeId) return;
+    fetch(`/api/my-recipes/${recipeId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (res.status === 401) {
+          onUnauthorized();
+          return;
+        }
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load recipe");
+        const r = data.recipe;
+        setForm({
+          title: r.title || "",
+          description: r.description || "",
+          image_url: r.image_url || "",
+          prepTimeMin: r.proptimemin != null ? String(r.proptimemin) : "",
+          cookTimeMin: r.cooktimemin != null ? String(r.cooktimemin) : "",
+          servings: r.servings != null ? String(r.servings) : "",
+          difficulty: r.difficulty || "EASY",
+          visibility: r.visibility || "PUBLIC",
+        });
+        if (r.image_url) setImagePreview(r.image_url);
+
+        if (data.steps && data.steps.length > 0) {
+          setSteps(
+            data.steps.map((s: any) => ({
+              instruction: s.instruction || "",
+              timerSec: s.timersec != null ? String(s.timersec) : "",
+            }))
+          );
+        }
+
+        if (data.ingredients && data.ingredients.length > 0) {
+          setIngredients(
+            data.ingredients.map((i: any) => ({
+              name: i.name || "",
+              amount: i.amount != null ? String(i.amount) : "",
+              unit: i.unit || "G",
+              notes: i.notes || "",
+            }))
+          );
+        }
+
+        if (data.tags && data.tags.length > 0) {
+          setTags(data.tags.join(", "));
+        }
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [recipeId, token, onUnauthorized]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -49,19 +105,14 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    // Validate file type
     if (!file.type.startsWith("image/")) {
       setError("Please select a valid image file");
       return;
     }
-
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError("Image must be smaller than 5MB");
       return;
     }
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
@@ -69,9 +120,7 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
       setForm({ ...form, image_url: dataUrl });
       setError("");
     };
-    reader.onerror = () => {
-      setError("Failed to read image file");
-    };
+    reader.onerror = () => setError("Failed to read image file");
     reader.readAsDataURL(file);
   };
 
@@ -80,37 +129,27 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
     setForm({ ...form, image_url: "" });
   };
 
-  const addStep = () => {
-    setSteps([...steps, { instruction: "", timerSec: "" }]);
+  const addStep = () => setSteps([...steps, { instruction: "", timerSec: "" }]);
+  const removeStep = (i: number) => setSteps(steps.filter((_, idx) => idx !== i));
+  const updateStep = (i: number, field: keyof Step, value: string) => {
+    const u = [...steps];
+    u[i][field] = value;
+    setSteps(u);
   };
 
-  const removeStep = (index: number) => {
-    setSteps(steps.filter((_, i) => i !== index));
-  };
-
-  const updateStep = (index: number, field: keyof Step, value: string) => {
-    const updated = [...steps];
-    updated[index][field] = value;
-    setSteps(updated);
-  };
-
-  const addIngredient = () => {
+  const addIngredient = () =>
     setIngredients([...ingredients, { name: "", amount: "", unit: "G", notes: "" }]);
-  };
-
-  const removeIngredient = (index: number) => {
-    setIngredients(ingredients.filter((_, i) => i !== index));
-  };
-
-  const updateIngredient = (index: number, field: keyof Ingredient, value: string) => {
-    const updated = [...ingredients];
-    updated[index][field] = value;
-    setIngredients(updated);
+  const removeIngredient = (i: number) =>
+    setIngredients(ingredients.filter((_, idx) => idx !== i));
+  const updateIngredient = (i: number, field: keyof Ingredient, value: string) => {
+    const u = [...ingredients];
+    u[i][field] = value;
+    setIngredients(u);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSaving(true);
     setError("");
     try {
       const filteredSteps = steps
@@ -119,7 +158,6 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
           instruction: s.instruction,
           timerSec: s.timerSec ? Number(s.timerSec) : undefined,
         }));
-
       const filteredIngredients = ingredients
         .filter((i) => i.name.trim())
         .map((i) => ({
@@ -128,7 +166,6 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
           unit: i.unit || undefined,
           notes: i.notes || undefined,
         }));
-
       const filteredTags = tags
         .split(",")
         .map((t) => t.trim())
@@ -147,8 +184,9 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
         ingredients: filteredIngredients,
         tags: filteredTags,
       };
-      const res = await fetch("/api/recipes", {
-        method: "POST",
+
+      const res = await fetch(`/api/recipes/${recipeId}`, {
+        method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -160,29 +198,52 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
         return;
       }
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create recipe");
-      navigate("/");
+      if (!res.ok) throw new Error(data.error || "Failed to update recipe");
+      navigate("/my-recipes");
     } catch (err: any) {
       setError(err.message || "Unknown error");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="add-recipe-page">
+        <div className="my-recipes-loading">
+          <div className="rd-spinner" />
+          <span>Loading recipe...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !form.title) {
+    return (
+      <div className="add-recipe-page">
+        <div className="my-recipes-empty">
+          <span className="my-recipes-empty-icon">😕</span>
+          <p>{error}</p>
+          <Link to="/my-recipes" className="rd-state-link">← Back to My Recipes</Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="add-recipe-page">
       <div className="add-recipe-card">
         <div className="auth-header">
-          <div className="auth-logo">📝</div>
-          <h2 className="auth-title">Add a Recipe</h2>
-          <p className="auth-subtitle">Share your culinary creation with the community</p>
+          <div className="auth-logo">✏️</div>
+          <h2 className="auth-title">Edit Recipe</h2>
+          <p className="auth-subtitle">Update your recipe details</p>
         </div>
 
         <form onSubmit={handleSubmit} className="add-recipe-form">
           {/* Basic Info Section */}
           <div className="add-recipe-section">
             <h3 className="add-recipe-section-title">Basic Information</h3>
-            
+
             <div className="auth-field">
               <label className="auth-label" htmlFor="recipe-title">Title *</label>
               <input
@@ -234,11 +295,7 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
                   )}
                 </label>
                 {imagePreview && (
-                  <button
-                    type="button"
-                    onClick={clearImage}
-                    className="add-recipe-clear-img"
-                  >
+                  <button type="button" onClick={clearImage} className="add-recipe-clear-img">
                     ✕ Remove
                   </button>
                 )}
@@ -434,9 +491,18 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
             </div>
           </div>
 
-          <button type="submit" disabled={loading} className="auth-btn">
-            {loading ? "Publishing..." : "Publish Recipe"}
-          </button>
+          <div className="edit-recipe-btn-row">
+            <button type="submit" disabled={saving} className="auth-btn">
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+            <button
+              type="button"
+              className="edit-recipe-cancel-btn"
+              onClick={() => navigate("/my-recipes")}
+            >
+              Cancel
+            </button>
+          </div>
 
           {error && <div className="auth-error">{error}</div>}
         </form>

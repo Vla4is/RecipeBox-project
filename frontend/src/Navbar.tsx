@@ -11,6 +11,7 @@ export default function Navbar({ loggedIn, onLogout }: { loggedIn: boolean; onLo
       <Link to="/" className="navbar-link">Home</Link>
       {!loggedIn && <Link to="/register" className="navbar-link">Register</Link>}
       {!loggedIn && <Link to="/login" className="navbar-link">Login</Link>}
+      {loggedIn && <Link to="/my-recipes" className="navbar-link">My Recipes</Link>}
       {loggedIn && <Link to="/add-recipe" className="navbar-link">Add Recipe</Link>}
       {loggedIn && (
         <button

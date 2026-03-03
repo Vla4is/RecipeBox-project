@@ -8,8 +8,8 @@ export default function Footer() {
         <div className="footer-brand">
           <h3 className="footer-brand-name">🍽️ RecipeBox</h3>
           <p className="footer-brand-desc">
-            Your go-to destination for chef-curated recipes from around the world.
-            Cook with confidence, share with love.
+            A thriving community where home cooks share their favorite recipes and inspire each other.
+            Cook together, share together, grow together.
           </p>
           <div className="footer-socials">
             <a href="#" className="footer-social-link" aria-label="Facebook">f</a>
@@ -24,10 +24,10 @@ export default function Footer() {
           <h4 className="footer-col-title">Explore</h4>
           <ul>
             <li><a href="#">Popular Recipes</a></li>
-            <li><a href="#">Latest Additions</a></li>
-            <li><a href="#">Meal Planning</a></li>
+            <li><a href="#">Latest from Community</a></li>
+            <li><a href="#">Top Contributors</a></li>
             <li><a href="#">Cooking Tips</a></li>
-            <li><a href="#">Video Tutorials</a></li>
+            <li><a href="#">Share Your Recipe</a></li>
           </ul>
         </div>
 
@@ -45,9 +45,9 @@ export default function Footer() {
 
         {/* Newsletter */}
         <div className="footer-newsletter">
-          <h4 className="footer-newsletter-title">Stay Inspired</h4>
+          <h4 className="footer-newsletter-title">Stay Connected</h4>
           <p className="footer-newsletter-desc">
-            Get weekly recipes, cooking tips, and exclusive content delivered to your inbox.
+            Get weekly community recipes, cooking tips, and member spotlights delivered to your inbox.
           </p>
           <form className="footer-newsletter-form" onSubmit={(e) => e.preventDefault()}>
             <input
@@ -64,7 +64,7 @@ export default function Footer() {
 
       <div className="footer-bottom">
         <p className="footer-copy">
-          © {new Date().getFullYear()} RecipeBox. Made with <span className="heart">♥</span> for food lovers everywhere.
+          © {new Date().getFullYear()} RecipeBox. Connecting home cooks worldwide with <span className="heart">♥</span>
         </p>
         <div className="footer-bottom-links">
           <a href="#">Privacy Policy</a>

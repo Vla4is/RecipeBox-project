@@ -100,7 +100,7 @@ function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            🍳 Over 1,000 Free Recipes
+            🍳 Join Our Recipe Community
           </motion.div>
 
           <motion.h1
@@ -109,7 +109,7 @@ function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.35 }}
           >
-            Cook Something <span className="accent">Incredible</span> Today
+            Share Your Passion for <span className="accent">Cooking</span>
           </motion.h1>
 
           <motion.p
@@ -118,7 +118,7 @@ function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.55 }}
           >
-            Discover chef-curated recipes from around the world. From quick weeknight dinners to show-stopping desserts — find your next favorite meal.
+            A vibrant community where home cooks share their favorite recipes. Discover meals from real people, share your creations, and connect through food.
           </motion.p>
 
           <motion.div
@@ -128,7 +128,7 @@ function Home() {
             transition={{ duration: 0.5, delay: 0.7 }}
           >
             <span className="hero-search-icon">🔍</span>
-            <input type="text" placeholder="Search for recipes, ingredients, cuisines..." />
+            <input type="text" placeholder="Search community recipes, ingredients, cuisines..." />
             <button className="hero-search-btn">Search</button>
           </motion.div>
 
@@ -167,7 +167,7 @@ function Home() {
             </div>
             <div className="hero-stat">
               <div className="hero-stat-number">50k+</div>
-              <div className="hero-stat-label">Happy Cooks</div>
+              <div className="hero-stat-label">Community Members</div>
             </div>
           </motion.div>
         </div>
@@ -175,8 +175,8 @@ function Home() {
 
       {/* ===== RECIPE SECTIONS ===== */}
       <div style={{ width: "100%", padding: "16px 0 0" }}>
-        <h2 className="section-heading">Trending Recipes</h2>
-        <p className="section-subheading">Drag to explore what's popular right now</p>
+        <h2 className="section-heading">Trending in Our Community</h2>
+        <p className="section-subheading">See what fellow home cooks are loving this week</p>
       </div>
       <Carousel>
         {recipesSet1.map(r => (
@@ -201,8 +201,8 @@ function Home() {
 
       {/* Database-driven grid for Explore All Recipes */}
       <div style={{ width: "100%", padding: "16px 0 0" }}>
-        <h2 className="section-heading">Explore All Recipes</h2>
-        <p className="section-subheading">Fresh from our kitchen database</p>
+        <h2 className="section-heading">Community Recipes</h2>
+        <p className="section-subheading">Shared by home cooks just like you</p>
       </div>
       <div ref={gridContainerRef} className="recipe-grid-container">
         {loading ? (

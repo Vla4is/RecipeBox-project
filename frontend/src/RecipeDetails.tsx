@@ -105,7 +105,7 @@ export default function RecipeDetails() {
       <div className="rd-state">
         <span className="rd-state-icon">😕</span>
         <p className="rd-state-msg">{error || "Recipe not found"}</p>
-        <Link to="/" className="rd-state-link">← Back to recipes</Link>
+        <Link to="/" className="rd-state-link">← Back to community</Link>
       </div>
     );
   }
@@ -133,7 +133,7 @@ export default function RecipeDetails() {
 
         <div className="rd-hero-inner">
           <Link to="/" className="rd-back">
-            <span className="rd-back-arrow">←</span> All Recipes
+            <span className="rd-back-arrow">←</span> Community Recipes
           </Link>
 
           <motion.h1

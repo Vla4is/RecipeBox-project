@@ -9,11 +9,16 @@ import RequireLoggedOut from "./RequireLoggedOut";
 import RequireAuth from "./RequireAuth";
 import AddRecipe from "./AddRecipe";
 import RecipeDetails from "./RecipeDetails";
+import MyRecipes from "./MyRecipes";
+import EditRecipe from "./EditRecipe";
+import { getTokenExpiryMs, isTokenExpired } from "./auth";
 
 export default function AppRouter() {
   // Persist login state in localStorage
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem("jwt_token");
+    const stored = localStorage.getItem("jwt_token");
+    if (!stored) return null;
+    return isTokenExpired(stored) ? null : stored;
   });
 
   useEffect(() => {
@@ -30,6 +35,22 @@ export default function AppRouter() {
   const handleLogout = () => {
     setToken(null);
   };
+
+  useEffect(() => {
+    if (!token) return;
+
+    const expiryMs = getTokenExpiryMs(token);
+    if (expiryMs == null || expiryMs <= Date.now()) {
+      setToken(null);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setToken(null);
+    }, expiryMs - Date.now());
+
+    return () => window.clearTimeout(timeout);
+  }, [token]);
 
   return (
     <BrowserRouter>
@@ -48,7 +69,17 @@ export default function AppRouter() {
         } />
         <Route path="/add-recipe" element={
           <RequireAuth loggedIn={!!token}>
-            <AddRecipe token={token!} />
+            <AddRecipe token={token!} onUnauthorized={handleLogout} />
+          </RequireAuth>
+        } />
+        <Route path="/my-recipes" element={
+          <RequireAuth loggedIn={!!token}>
+            <MyRecipes token={token!} onUnauthorized={handleLogout} />
+          </RequireAuth>
+        } />
+        <Route path="/edit-recipe/:recipeId" element={
+          <RequireAuth loggedIn={!!token}>
+            <EditRecipe token={token!} onUnauthorized={handleLogout} />
           </RequireAuth>
         } />
         <Route path="/recipes/:recipeId" element={<RecipeDetails />} />

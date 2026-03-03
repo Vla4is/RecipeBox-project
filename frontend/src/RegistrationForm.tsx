@@ -41,8 +41,8 @@ export default function RegistrationForm() {
       <div className="auth-card">
         <div className="auth-header">
           <div className="auth-logo">🍽️</div>
-          <h2 className="auth-title">Create Account</h2>
-          <p className="auth-subtitle">Join thousands of happy cooks</p>
+          <h2 className="auth-title">Join Our Community</h2>
+          <p className="auth-subtitle">Start sharing your recipes with thousands of home cooks</p>
         </div>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="auth-field">

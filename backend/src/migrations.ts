@@ -77,10 +77,19 @@ async function createTables() {
         await pool.query(`ALTER TABLE recipes ADD COLUMN image_url TEXT`);
         console.log('Added image_url column to recipes table');
       }
+      // ensure userid column exists (added later)
+      const userIdCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'userid'`
+      );
+      if (userIdCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE recipes ADD COLUMN userid UUID REFERENCES users(userid) ON DELETE SET NULL`);
+        console.log('Added userid column to recipes table');
+      }
     } else {
       await pool.query(`
         CREATE TABLE recipes (
           recipeid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          userid UUID REFERENCES users(userid) ON DELETE SET NULL,
           title VARCHAR(255) NOT NULL,
           description TEXT,
           image_url TEXT,

@@ -42,7 +42,7 @@ export default function LoginForm({ onLogin }: { onLogin?: (jwt: string) => void
         <div className="auth-header">
           <div className="auth-logo">🍽️</div>
           <h2 className="auth-title">Welcome Back</h2>
-          <p className="auth-subtitle">Sign in to access your recipes</p>
+          <p className="auth-subtitle">Sign in to share and discover recipes</p>
         </div>
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="auth-field">
