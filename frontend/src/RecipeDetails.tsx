@@ -79,7 +79,11 @@ export default function RecipeDetails() {
       setLoading(false);
       return;
     }
-    fetch(`/api/recipes/${recipeId}`)
+
+    const token = localStorage.getItem("jwt_token");
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    fetch(`/api/recipes/${recipeId}`, { headers })
       .then(async (res) => {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || "Failed to load recipe");

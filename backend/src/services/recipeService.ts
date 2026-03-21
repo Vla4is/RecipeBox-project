@@ -138,12 +138,12 @@ export async function getRecipeTimeRanges(userid?: string): Promise<RecipeTimeRa
   };
 }
 
-export async function getRecipeDetails(recipeId: string): Promise<RecipeDetail | null> {
+export async function getRecipeDetails(recipeId: string, userid?: string): Promise<RecipeDetail | null> {
   const recipeRes = await pool.query(
-    `SELECT recipeid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
-     WHERE recipeid = $1 AND visibility = 'PUBLIC'`,
-    [recipeId]
+     WHERE recipeid = $1 AND (visibility = 'PUBLIC' OR ($2::uuid IS NOT NULL AND userid = $2::uuid))`,
+    [recipeId, userid ?? null]
   );
 
   if (recipeRes.rows.length === 0) {

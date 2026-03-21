@@ -135,6 +135,7 @@ app.get("/api/recipes/search", async (req: Request, res: Response) => {
 
 app.get("/api/recipes/:recipeId", async (req: Request, res: Response) => {
   try {
+    const user = getOptionalUser(req);
     const rawRecipeId = req.params.recipeId;
     const recipeId = Array.isArray(rawRecipeId) ? rawRecipeId[0] : rawRecipeId;
 
@@ -142,7 +143,7 @@ app.get("/api/recipes/:recipeId", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "recipeId is required" });
     }
 
-    const details = await getRecipeDetails(recipeId);
+    const details = await getRecipeDetails(recipeId, user?.userid);
     if (!details) {
       return res.status(404).json({ error: "Recipe not found" });
     }

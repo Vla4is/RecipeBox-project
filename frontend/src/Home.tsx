@@ -141,8 +141,8 @@ function Home() {
     const cookFilterActive = maxCookTime < timeRanges.maxCookTime;
     const difficultyFilterActive = selectedDifficulty !== null;
     const hasActiveFilters = term.length > 0 || prepFilterActive || cookFilterActive || difficultyFilterActive;
-
-    if (!hasActiveFilters) {
+    // Trigger search if: text entered OR any filter active OR search bar is focused
+    if (!hasActiveFilters && !isSearchUiFocused) {
       setShowSearchResults(false);
       setSearchResults([]);
       setIsSearching(false);
@@ -175,7 +175,7 @@ function Home() {
     } finally {
       setIsSearching(false);
     }
-  }, [searchTerm, maxPrepTime, maxCookTime, selectedDifficulty, timeRanges.maxPrepTime, timeRanges.maxCookTime]);
+  }, [searchTerm, maxPrepTime, maxCookTime, selectedDifficulty, isSearchUiFocused, timeRanges.maxPrepTime, timeRanges.maxCookTime]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -468,15 +468,7 @@ function Home() {
       </header>
 
       {/* ===== RECIPE SECTIONS ===== */}
-      <div style={{ width: "100%", padding: "16px 0 0" }}>
-        <h2 className="section-heading">
-          {showSearchResults ? "Search Results" : "Trending in Our Community"}
-        </h2>
-        <p className="section-subheading">
-          {showSearchResults ? "Recipes matching your search and time filters" : "See what fellow home cooks are loving this week"}
-        </p>
-      </div>
-      {!showSearchResults && (
+      <div className={`carousel-section ${showSearchResults ? "carousel-section-hidden" : ""}`}>
         <Carousel>
           {recipesSet1.map(r => (
             <motion.div
@@ -497,7 +489,7 @@ function Home() {
             </motion.div>
           ))}
         </Carousel>
-      )}
+      </div>
 
       {/* Database-driven grid for Explore All Recipes */}
       <div style={{ width: "100%", padding: "16px 0 0" }}>
