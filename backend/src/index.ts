@@ -3,7 +3,17 @@ import express, { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import initializeDatabase from "./db-init";
 import { createUser, authenticateUser } from "./services/userService";
-import { getPublicRecipes, createRecipe, getRecipeDetails, getUserRecipes, updateRecipe, deleteRecipe, getRecipeDetailsForOwner } from "./services/recipeService";
+import {
+  getPublicRecipes,
+  createRecipe,
+  getRecipeDetails,
+  getUserRecipes,
+  updateRecipe,
+  deleteRecipe,
+  getRecipeDetailsForOwner,
+  searchRecipes,
+  getRecipeTimeRanges,
+} from "./services/recipeService";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 
@@ -29,6 +39,20 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
     return next();
   } catch {
     return res.status(401).json({ error: "Invalid or expired token" });
+  }
+}
+
+function getOptionalUser(req: Request): { userid: string; email: string; name: string } | null {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) {
+    return null;
+  }
+  try {
+    const token = header.split(" ")[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userid: string; email: string; name: string };
+    return decoded;
+  } catch {
+    return null;
   }
 }
 // Login route must be after app is defined
@@ -63,6 +87,48 @@ app.get("/api/recipes", async (_req: Request, res: Response) => {
     return res.json({ recipes });
   } catch (err) {
     console.error("Error fetching recipes:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/recipes/time-ranges", async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    const ranges = await getRecipeTimeRanges(user?.userid);
+    return res.json(ranges);
+  } catch (err) {
+    console.error("Error fetching recipe time ranges:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/recipes/search", async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    const rawQuery = req.query.q;
+    const q = (Array.isArray(rawQuery) ? rawQuery[0] : rawQuery) || "";
+    const rawMaxPrep = req.query.maxPrepTime;
+    const rawMaxCook = req.query.maxCookTime;
+    const rawDifficulty = req.query.difficulty;
+
+    const parsedMaxPrep = Number(Array.isArray(rawMaxPrep) ? rawMaxPrep[0] : rawMaxPrep);
+    const parsedMaxCook = Number(Array.isArray(rawMaxCook) ? rawMaxCook[0] : rawMaxCook);
+    const parsedDifficulties = (Array.isArray(rawDifficulty) ? rawDifficulty : [rawDifficulty])
+      .filter((v): v is string => typeof v === "string")
+      .map((v) => v.toUpperCase())
+      .filter((v): v is "EASY" | "MEDIUM" | "HARD" => v === "EASY" || v === "MEDIUM" || v === "HARD");
+
+    const recipes = await searchRecipes({
+      searchTerm: String(q),
+      userid: user?.userid,
+      maxPrepTime: Number.isFinite(parsedMaxPrep) ? parsedMaxPrep : undefined,
+      maxCookTime: Number.isFinite(parsedMaxCook) ? parsedMaxCook : undefined,
+      difficulties: parsedDifficulties,
+    });
+
+    return res.json({ recipes });
+  } catch (err) {
+    console.error("Error searching recipes:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
