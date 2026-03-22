@@ -1521,6 +1521,14 @@
   color: #fff;
 }
 
+.rd-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
 /* back link */
 .rd-back {
   display: inline-flex;
@@ -1535,6 +1543,12 @@
   transition: color 0.2s;
 }
 .rd-back:hover { color: #ffd54f; }
+.rd-back-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
 .rd-back-arrow {
   display: inline-flex;
   align-items: center;
@@ -1547,6 +1561,34 @@
   transition: background 0.2s;
 }
 .rd-back:hover .rd-back-arrow { background: rgba(255, 213, 79, 0.22); }
+
+.rd-save-btn {
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 14px;
+  cursor: pointer;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.rd-save-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(255, 213, 79, 0.7);
+  background: rgba(15, 23, 42, 0.85);
+}
+.rd-save-btn:disabled {
+  opacity: 0.75;
+  cursor: wait;
+}
+.rd-save-btn-saved {
+  background: rgba(22, 163, 74, 0.86);
+  border-color: rgba(134, 239, 172, 0.8);
+}
 
 .rd-title {
   font-family: 'Playfair Display', Georgia, serif;

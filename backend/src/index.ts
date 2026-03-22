@@ -12,6 +12,10 @@ import {
   updateRecipe,
   deleteRecipe,
   getRecipeDetailsForOwner,
+  getSavedRecipes,
+  isRecipeSaved,
+  saveRecipeForUser,
+  removeSavedRecipeForUser,
   searchRecipes,
   getRecipeTimeRanges,
   getHomeTagSections,
@@ -316,6 +320,57 @@ app.get("/api/my-recipes", requireAuth, async (req: AuthRequest, res: Response) 
     return res.json({ recipes });
   } catch (err) {
     console.error("Error fetching user recipes:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/my-saved-recipes", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipes = await getSavedRecipes(req.user!.userid);
+    return res.json({ recipes });
+  } catch (err) {
+    console.error("Error fetching saved recipes:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/saved-recipes/:recipeId/status", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipeId = req.params.recipeId as string;
+    const saved = await isRecipeSaved(req.user!.userid, recipeId);
+    return res.json({ saved });
+  } catch (err) {
+    console.error("Error checking saved recipe status:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/saved-recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipeId = req.params.recipeId as string;
+    await saveRecipeForUser(req.user!.userid, recipeId);
+
+    await recordRecipeEvent({
+      userid: req.user!.userid,
+      recipeid: recipeId,
+      eventType: "SAVE",
+      countryCode: typeof req.body?.countryCode === "string" ? req.body.countryCode : undefined,
+    });
+
+    return res.status(201).json({ success: true });
+  } catch (err) {
+    console.error("Error saving recipe:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.delete("/api/saved-recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const recipeId = req.params.recipeId as string;
+    await removeSavedRecipeForUser(req.user!.userid, recipeId);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Error removing saved recipe:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

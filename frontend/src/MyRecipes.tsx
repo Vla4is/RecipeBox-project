@@ -32,22 +32,32 @@ function diffBadge(d: string | null) {
 export default function MyRecipes({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
   const navigate = useNavigate();
   const [recipes, setRecipes] = useState<RecipeRow[]>([]);
+  const [savedRecipes, setSavedRecipes] = useState<RecipeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"owned" | "saved">("owned");
 
   useEffect(() => {
-    fetch("/api/my-recipes", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        if (res.status === 401) {
+    Promise.all([
+      fetch("/api/my-recipes", {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch("/api/my-saved-recipes", {
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+      .then(async ([ownRes, savedRes]) => {
+        if (ownRes.status === 401 || savedRes.status === 401) {
           onUnauthorized();
           return;
         }
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load recipes");
-        setRecipes(data.recipes || []);
+        const ownData = await ownRes.json();
+        const savedData = await savedRes.json();
+        if (!ownRes.ok) throw new Error(ownData.error || "Failed to load recipes");
+        if (!savedRes.ok) throw new Error(savedData.error || "Failed to load saved recipes");
+        setRecipes(ownData.recipes || []);
+        setSavedRecipes(savedData.recipes || []);
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -74,6 +84,29 @@ export default function MyRecipes({ token, onUnauthorized }: { token: string; on
       setDeletingId(null);
     }
   };
+
+  const handleUnsave = async (recipeId: string) => {
+    if (!confirm("Are you sure you want to unsave this recipe?")) return;
+    try {
+      const res = await fetch(`/api/saved-recipes/${recipeId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        onUnauthorized();
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Failed to unsave recipe");
+      }
+      setSavedRecipes((prev) => prev.filter((r) => r.recipeid !== recipeId));
+    } catch {
+      // Keep interaction non-blocking.
+    }
+  };
+
+  const activeRecipes = activeTab === "owned" ? recipes : savedRecipes;
 
   if (loading) {
     return (
@@ -104,7 +137,9 @@ export default function MyRecipes({ token, onUnauthorized }: { token: string; on
           <div>
             <h1 className="my-recipes-title">My Recipes</h1>
             <p className="my-recipes-subtitle">
-              {recipes.length} recipe{recipes.length !== 1 ? "s" : ""} in your collection
+              {activeTab === "owned"
+                ? `${recipes.length} recipe${recipes.length !== 1 ? "s" : ""} in your collection`
+                : `${savedRecipes.length} saved recipe${savedRecipes.length !== 1 ? "s" : ""}`}
             </p>
           </div>
           <Link to="/add-recipe" className="my-recipes-add-btn">
@@ -112,32 +147,73 @@ export default function MyRecipes({ token, onUnauthorized }: { token: string; on
           </Link>
         </div>
 
-        {recipes.length === 0 ? (
+        <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+          <button
+            type="button"
+            onClick={() => setActiveTab("owned")}
+            style={{
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 14px",
+              fontWeight: 700,
+              cursor: "pointer",
+              background: activeTab === "owned" ? "#0f172a" : "#e5e7eb",
+              color: activeTab === "owned" ? "#fff" : "#111827",
+            }}
+          >
+            My Recipes ({recipes.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("saved")}
+            style={{
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 14px",
+              fontWeight: 700,
+              cursor: "pointer",
+              background: activeTab === "saved" ? "#0f172a" : "#e5e7eb",
+              color: activeTab === "saved" ? "#fff" : "#111827",
+            }}
+          >
+            Saved ({savedRecipes.length})
+          </button>
+        </div>
+
+        {activeRecipes.length === 0 ? (
           <motion.div
+            key={`empty-${activeTab}`}
             className="my-recipes-empty"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <span className="my-recipes-empty-icon">📝</span>
-            <h3>No recipes yet</h3>
-            <p>Start sharing your culinary creations with the community!</p>
-            <Link to="/add-recipe" className="my-recipes-add-btn" style={{ marginTop: 16 }}>
-              Create Your First Recipe
-            </Link>
+            <span className="my-recipes-empty-icon">{activeTab === "owned" ? "📝" : "🔖"}</span>
+            <h3>{activeTab === "owned" ? "No recipes yet" : "No saved recipes yet"}</h3>
+            <p>
+              {activeTab === "owned"
+                ? "Start sharing your culinary creations with the community!"
+                : "Save recipes you like and they will appear here."}
+            </p>
+            {activeTab === "owned" ? (
+              <Link to="/add-recipe" className="my-recipes-add-btn" style={{ marginTop: 16 }}>
+                Create Your First Recipe
+              </Link>
+            ) : null}
           </motion.div>
         ) : (
           <motion.div
+            key={`grid-${activeTab}`}
             className="my-recipes-grid"
             initial="hidden"
             animate="visible"
             variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.06 } } }}
           >
-            {recipes.map((recipe) => {
+            {activeRecipes.map((recipe) => {
               const diff = diffBadge(recipe.difficulty);
               const totalTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0) || null;
               return (
                 <motion.div
-                  key={recipe.recipeid}
+                  key={`${activeTab}-${recipe.recipeid}`}
                   className="my-recipe-card"
                   variants={{
                     hidden: { opacity: 0, y: 20 },
@@ -158,15 +234,17 @@ export default function MyRecipes({ token, onUnauthorized }: { token: string; on
                       >
                         {diff.label}
                       </span>
-                      <span
-                        className="my-recipe-badge"
-                        style={{
-                          background: recipe.visibility === "PUBLIC" ? "#e3f2fd" : "#fce4ec",
-                          color: recipe.visibility === "PUBLIC" ? "#1565c0" : "#c62828",
-                        }}
-                      >
-                        {recipe.visibility === "PUBLIC" ? "🌍 Public" : "🔒 Private"}
-                      </span>
+                      {activeTab === "owned" ? (
+                        <span
+                          className="my-recipe-badge"
+                          style={{
+                            background: recipe.visibility === "PUBLIC" ? "#e3f2fd" : "#fce4ec",
+                            color: recipe.visibility === "PUBLIC" ? "#1565c0" : "#c62828",
+                          }}
+                        >
+                          {recipe.visibility === "PUBLIC" ? "🌍 Public" : "🔒 Private"}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -189,30 +267,45 @@ export default function MyRecipes({ token, onUnauthorized }: { token: string; on
                       )}
                     </div>
 
-                    <div className="my-recipe-card-date">
-                      Added {new Date(recipe.created_at).toLocaleDateString()}
-                    </div>
+                    {activeTab === "owned" ? (
+                      <div className="my-recipe-card-date">
+                        Added {new Date(recipe.created_at).toLocaleDateString()}
+                      </div>
+                    ) : null}
 
                     <div className="my-recipe-card-actions">
-                      <button
-                        className="my-recipe-action-btn my-recipe-edit-btn"
-                        onClick={() => navigate(`/edit-recipe/${recipe.recipeid}`)}
-                      >
-                        ✏️ Edit
-                      </button>
+                      {activeTab === "owned" ? (
+                        <button
+                          className="my-recipe-action-btn my-recipe-edit-btn"
+                          onClick={() => navigate(`/edit-recipe/${recipe.recipeid}`)}
+                        >
+                          ✏️ Edit
+                        </button>
+                      ) : (
+                        <button
+                          className="my-recipe-action-btn my-recipe-edit-btn"
+                          onClick={() => handleUnsave(recipe.recipeid)}
+                        >
+                          🔖 Unsave
+                        </button>
+                      )}
+
                       <button
                         className="my-recipe-action-btn my-recipe-view-btn"
                         onClick={() => navigate(`/recipes/${recipe.recipeid}`)}
                       >
                         👁️ View
                       </button>
-                      <button
-                        className="my-recipe-action-btn my-recipe-delete-btn"
-                        onClick={() => handleDelete(recipe.recipeid, recipe.title)}
-                        disabled={deletingId === recipe.recipeid}
-                      >
-                        {deletingId === recipe.recipeid ? "…" : "🗑️ Delete"}
-                      </button>
+
+                      {activeTab === "owned" ? (
+                        <button
+                          className="my-recipe-action-btn my-recipe-delete-btn"
+                          onClick={() => handleDelete(recipe.recipeid, recipe.title)}
+                          disabled={deletingId === recipe.recipeid}
+                        >
+                          {deletingId === recipe.recipeid ? "…" : "🗑️ Delete"}
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 </motion.div>

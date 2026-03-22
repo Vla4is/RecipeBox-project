@@ -81,6 +81,8 @@ export default function RecipeDetails() {
   const [data, setData] = useState<RecipeDetailsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
 
   const handleBackToPrevious = () => {
     if (window.history.length > 1) {
@@ -142,6 +144,53 @@ export default function RecipeDetails() {
       .finally(() => setLoading(false));
   }, [recipeId]);
 
+  useEffect(() => {
+    if (!recipeId) return;
+    const token = localStorage.getItem("jwt_token");
+    if (!token) {
+      setIsSaved(false);
+      return;
+    }
+
+    fetch(`/api/saved-recipes/${recipeId}/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const body = await res.json();
+        setIsSaved(Boolean(body.saved));
+      })
+      .catch(() => {
+        // Non-blocking for status indicator.
+      });
+  }, [recipeId]);
+
+  const handleToggleSaved = async () => {
+    if (!recipeId) return;
+    const token = localStorage.getItem("jwt_token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setSaveLoading(true);
+    try {
+      const res = await fetch(`/api/saved-recipes/${recipeId}`, {
+        method: isSaved ? "DELETE" : "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error || "Failed to update saved recipe");
+      }
+      setIsSaved((prev) => !prev);
+    } catch {
+      // Keep UI stable on transient errors.
+    } finally {
+      setSaveLoading(false);
+    }
+  };
+
   /* ---------- LOADING ---------- */
   if (loading) {
     return (
@@ -192,14 +241,24 @@ export default function RecipeDetails() {
         <div className="rd-hero-fade" />
 
         <div className="rd-hero-inner">
-          <button
-            type="button"
-            className="rd-back"
-            onClick={handleBackToPrevious}
-            style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
-          >
-            <span className="rd-back-arrow">←</span> Community Recipes
-          </button>
+          <div className="rd-hero-top">
+            <button
+              type="button"
+              className="rd-back rd-back-btn"
+              onClick={handleBackToPrevious}
+            >
+              <span className="rd-back-arrow">←</span> Community Recipes
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleSaved}
+              disabled={saveLoading}
+              className={`rd-save-btn ${isSaved ? "rd-save-btn-saved" : ""}`}
+            >
+              {saveLoading ? "Updating..." : isSaved ? "Saved ✓" : "Save Recipe"}
+            </button>
+          </div>
 
           <motion.h1
             className="rd-title"

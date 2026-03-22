@@ -436,6 +436,64 @@ export async function getUserRecipes(userid: string): Promise<RecipeRow[]> {
   return res.rows;
 }
 
+export async function getSavedRecipes(userid: string): Promise<RecipeRow[]> {
+  const res = await pool.query(
+    `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.proptimemin, r.cooktimemin, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at
+     FROM favorites f
+     JOIN recipes r ON r.recipeid = f.recipeid
+     WHERE f.userid = $1::uuid
+       AND (r.visibility = 'PUBLIC' OR r.userid = $1::uuid)
+     ORDER BY f.saved_at DESC`,
+    [userid]
+  );
+
+  return res.rows;
+}
+
+export async function isRecipeSaved(userid: string, recipeId: string): Promise<boolean> {
+  const res = await pool.query(
+    `SELECT 1
+     FROM favorites
+     WHERE userid = $1::uuid AND recipeid = $2::uuid
+     LIMIT 1`,
+    [userid, recipeId]
+  );
+
+  return res.rows.length > 0;
+}
+
+export async function saveRecipeForUser(userid: string, recipeId: string): Promise<boolean> {
+  const res = await pool.query(
+    `INSERT INTO favorites (userid, recipeid)
+     SELECT $1::uuid, $2::uuid
+     WHERE EXISTS (
+       SELECT 1
+       FROM recipes r
+       WHERE r.recipeid = $2::uuid
+         AND (r.visibility = 'PUBLIC' OR r.userid = $1::uuid)
+     )
+       AND NOT EXISTS (
+         SELECT 1
+         FROM favorites f
+         WHERE f.userid = $1::uuid AND f.recipeid = $2::uuid
+       )
+     RETURNING favoriteid`,
+    [userid, recipeId]
+  );
+
+  return res.rows.length > 0;
+}
+
+export async function removeSavedRecipeForUser(userid: string, recipeId: string): Promise<boolean> {
+  const res = await pool.query(
+    `DELETE FROM favorites
+     WHERE userid = $1::uuid AND recipeid = $2::uuid`,
+    [userid, recipeId]
+  );
+
+  return (res.rowCount ?? 0) > 0;
+}
+
 export async function getRecipeDetailsForOwner(recipeId: string, userid: string): Promise<RecipeDetail | null> {
   const recipeRes = await pool.query(
     `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
