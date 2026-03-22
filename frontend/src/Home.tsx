@@ -54,6 +54,7 @@ const GRID_GAP = 32;
 const GRID_PADDING = 32;
 const MAX_CAROUSEL_ITEMS = 14;
 const HOME_VIEW_STATE_KEY = "itsystems_home_view_state_v1";
+const DEFAULT_CAROUSEL_IMAGE = "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg";
 
 const DEFAULT_TIME_RANGES: RecipeTimeRanges = {
   minPrepTime: 0,
@@ -452,6 +453,27 @@ function Home() {
     return source.slice(0, MAX_CAROUSEL_ITEMS);
   }, [recommendedRecipes, dbRecipes]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    type NetworkInfo = { effectiveType?: string; saveData?: boolean };
+    const navigatorWithConnection = navigator as Navigator & { connection?: NetworkInfo };
+    const connection = navigatorWithConnection.connection;
+
+    if (connection?.saveData) return;
+
+    const preloadLimit = connection?.effectiveType === "4g" ? 8 : 5;
+    const preloadUrls = carouselRecipes
+      .slice(0, preloadLimit)
+      .map((recipe) => recipe.image_url || DEFAULT_CAROUSEL_IMAGE);
+
+    preloadUrls.forEach((url) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = url;
+    });
+  }, [carouselRecipes]);
+
   return (
     <div className="home-page">
 
@@ -666,14 +688,14 @@ function Home() {
       {/* ===== RECIPE SECTIONS ===== */}
       <div className={`carousel-section ${showSearchResults ? "carousel-section-hidden" : ""}`}>
         <Carousel>
-          {carouselRecipes.map((r) => (
+          {carouselRecipes.map((r, index) => (
             <motion.div
               key={r.recipeid}
               whileHover={{ scale: 1.05, boxShadow: "0 8px 32px #fff2" }}
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              style={{ minWidth: 260, maxWidth: 260, height: 320, position: "relative", borderRadius: 16, overflow: "hidden", margin: "0 0", background: "#222", display: "flex", alignItems: "flex-end", justifyContent: "center", touchAction: "none", cursor: "pointer" }}
+              style={{ minWidth: 260, maxWidth: 260, height: 320, position: "relative", borderRadius: 16, overflow: "hidden", margin: "0 0", background: "#222", display: "flex", alignItems: "flex-end", justifyContent: "center", touchAction: "pan-y", cursor: "pointer" }}
               onMouseDown={(e) => {
                 (e.currentTarget as any).__holdStartTime = Date.now();
               }}
@@ -687,10 +709,13 @@ function Home() {
               }}
             >
               <img
-                src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
+                src={r.image_url || DEFAULT_CAROUSEL_IMAGE}
                 alt={r.title}
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
                 draggable={false}
+                loading={index < 5 ? "eager" : "lazy"}
+                fetchPriority={index < 3 ? "high" : "auto"}
+                decoding="async"
               />
               <div style={{ position: "absolute", top: 0, left: 0, width: "100%", padding: "8px", display: "flex", flexWrap: "wrap", gap: "4px", pointerEvents: "none" }}>
                 {r.difficulty && (
@@ -855,16 +880,32 @@ function Carousel({ children }: { children: React.ReactNode }) {
   const [maxDrag, setMaxDrag] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
-  const [isHolding, setIsHolding] = useState(false);
-  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const canScrollLeftRef = useRef(false);
+  const canScrollRightRef = useRef(true);
+  const dragSyncRafRef = useRef<number | null>(null);
   const xAnimationRef = useRef<ReturnType<typeof animate> | null>(null);
-  const buttonHoldStartRef = useRef<number | null>(null);
-  const didContinuousScrollRef = useRef(false);
 
   const syncScrollState = (position: number, dragLimit: number = maxDrag) => {
     const edgeTolerance = 0.5;
-    setCanScrollLeft(position < -edgeTolerance);
-    setCanScrollRight(position > -dragLimit + edgeTolerance);
+    const nextCanScrollLeft = position < -edgeTolerance;
+    const nextCanScrollRight = position > -dragLimit + edgeTolerance;
+
+    if (canScrollLeftRef.current !== nextCanScrollLeft) {
+      canScrollLeftRef.current = nextCanScrollLeft;
+      setCanScrollLeft(nextCanScrollLeft);
+    }
+    if (canScrollRightRef.current !== nextCanScrollRight) {
+      canScrollRightRef.current = nextCanScrollRight;
+      setCanScrollRight(nextCanScrollRight);
+    }
+  };
+
+  const queueSyncScrollState = () => {
+    if (dragSyncRafRef.current != null) return;
+    dragSyncRafRef.current = window.requestAnimationFrame(() => {
+      dragSyncRafRef.current = null;
+      syncScrollState(x.get());
+    });
   };
 
   const recalculate = () => {
@@ -889,7 +930,7 @@ function Carousel({ children }: { children: React.ReactNode }) {
     }
 
     xAnimationRef.current = animate(x, targetX, {
-      duration: isHolding ? 0 : 0.2,
+      duration: 0.24,
       ease: "easeOut",
       onUpdate: (latest) => {
         syncScrollState(latest);
@@ -900,53 +941,15 @@ function Carousel({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const startContinuousScroll = (direction: "left" | "right") => {
-    if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
-
-    buttonHoldStartRef.current = Date.now();
-    didContinuousScrollRef.current = false;
-    
-    setIsHolding(true);
-    
-    scrollIntervalRef.current = setInterval(() => {
-      didContinuousScrollRef.current = true;
-      const distance = direction === "right" ? -90 : 90;
-      scrollBy(distance);
-    }, 35);
-  };
-
-  const stopContinuousScroll = () => {
-    setIsHolding(false);
-    if (scrollIntervalRef.current) {
-      clearInterval(scrollIntervalRef.current);
-      scrollIntervalRef.current = null;
-    }
-  };
-
-  const handleButtonClick = (direction: "left" | "right") => {
-    const holdDuration = buttonHoldStartRef.current ? Date.now() - buttonHoldStartRef.current : 0;
-    const wasHoldInteraction = didContinuousScrollRef.current || holdDuration >= 140;
-
-    buttonHoldStartRef.current = null;
-    didContinuousScrollRef.current = false;
-
-    if (wasHoldInteraction) return;
-
-    if (direction === "left" && canScrollLeft) {
-      scrollBy(340);
-    }
-    if (direction === "right" && canScrollRight) {
-      scrollBy(-340);
-    }
-  };
-
   useEffect(() => {
     const timeout = setTimeout(recalculate, 50);
     window.addEventListener("resize", recalculate);
     return () => {
       clearTimeout(timeout);
       window.removeEventListener("resize", recalculate);
-      stopContinuousScroll();
+      if (dragSyncRafRef.current != null) {
+        window.cancelAnimationFrame(dragSyncRafRef.current);
+      }
       if (xAnimationRef.current) {
         xAnimationRef.current.stop();
       }
@@ -966,10 +969,17 @@ function Carousel({ children }: { children: React.ReactNode }) {
           dragConstraints={{ left: -maxDrag, right: 0 }}
           whileTap={{ cursor: "grabbing" }}
           dragMomentum={true}
+          dragTransition={{
+            power: 0.22,
+            timeConstant: 260,
+            bounceStiffness: 620,
+            bounceDamping: 44,
+            modifyTarget: (target) => Math.max(-maxDrag, Math.min(0, target)),
+          }}
           dragElastic={0.08}
           dragPropagation={false}
           onDrag={() => {
-            syncScrollState(x.get());
+            queueSyncScrollState();
           }}
           onDragEnd={() => {
             syncScrollState(x.get());
@@ -987,10 +997,7 @@ function Carousel({ children }: { children: React.ReactNode }) {
 
       {/* Left Arrow Button - Modern Style */}
       <motion.button
-        onMouseDown={() => canScrollLeft && startContinuousScroll("left")}
-        onMouseUp={stopContinuousScroll}
-        onMouseLeave={stopContinuousScroll}
-        onClick={() => handleButtonClick("left")}
+        onClick={() => canScrollLeft && scrollBy(340)}
         disabled={!canScrollLeft}
         style={{
           position: "absolute",
@@ -1025,10 +1032,7 @@ function Carousel({ children }: { children: React.ReactNode }) {
 
       {/* Right Arrow Button - Modern Style */}
       <motion.button
-        onMouseDown={() => canScrollRight && startContinuousScroll("right")}
-        onMouseUp={stopContinuousScroll}
-        onMouseLeave={stopContinuousScroll}
-        onClick={() => handleButtonClick("right")}
+        onClick={() => canScrollRight && scrollBy(-340)}
         disabled={!canScrollRight}
         style={{
           position: "absolute",
