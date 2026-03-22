@@ -290,7 +290,12 @@ async function createTables() {
       console.log('Shopping item table created successfully');
     }
 
-    await seedRecipes(pool);
+    const shouldAutoSeedRecipes = (process.env.AUTO_SEED_RECIPES || "false").toLowerCase() === "true";
+    if (shouldAutoSeedRecipes) {
+      await seedRecipes(pool);
+    } else {
+      console.log("Skipping auto recipe seed (AUTO_SEED_RECIPES is not 'true')");
+    }
   } catch (error) {
     console.error('Error creating tables:', error);
     throw error;

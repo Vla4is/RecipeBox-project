@@ -29,11 +29,16 @@ Create .env file in the backend folder
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=postgres
-DB_PASSWORD=123456
-DB_NAME=postgres
+DB_PASSWORD=12345
+DB_MAINTENANCE_DB=postgres
+DB_NAME=your_db
+AUTO_SEED_RECIPES=true
 NODE_ENV=development
 
+
 ```
+- Disable auto seed after the first run or if you dont want dummy data
+
 ## Development
 
 ### Run all dev servers

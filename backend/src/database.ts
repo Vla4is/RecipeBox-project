@@ -3,12 +3,26 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim() === "") {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+const dbPortRaw = getRequiredEnv("DB_PORT");
+const dbPort = Number.parseInt(dbPortRaw, 10);
+if (Number.isNaN(dbPort)) {
+  throw new Error(`Invalid DB_PORT value: ${dbPortRaw}`);
+}
+
 export const pool = new Pool({
-  host: process.env.DB_HOST || "localhost",
-  port: parseInt(process.env.DB_PORT || "5432"),
-  user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD || "qwerty",
-  database: process.env.DB_NAME || "itsystems_db",
+  host: getRequiredEnv("DB_HOST"),
+  port: dbPort,
+  user: getRequiredEnv("DB_USER"),
+  password: getRequiredEnv("DB_PASSWORD"),
+  database: getRequiredEnv("DB_NAME"),
 });
 
 pool.on("error", (err) => {

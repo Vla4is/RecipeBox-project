@@ -4,11 +4,25 @@ import createTables from "./migrations";
 
 dotenv.config();
 
-const dbName = process.env.DB_NAME || "itsystems_db";
-const dbUser = process.env.DB_USER || "postgres";
-const dbPassword = process.env.DB_PASSWORD || "qwerty";
-const dbHost = process.env.DB_HOST || "localhost";
-const dbPort = parseInt(process.env.DB_PORT || "5432");
+function getRequiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim() === "") {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+const dbName = getRequiredEnv("DB_NAME");
+const dbUser = getRequiredEnv("DB_USER");
+const dbPassword = getRequiredEnv("DB_PASSWORD");
+const dbHost = getRequiredEnv("DB_HOST");
+const dbMaintenanceDatabase = getRequiredEnv("DB_MAINTENANCE_DB");
+const dbPortRaw = getRequiredEnv("DB_PORT");
+const dbPort = Number.parseInt(dbPortRaw, 10);
+
+if (Number.isNaN(dbPort)) {
+  throw new Error(`Invalid DB_PORT value: ${dbPortRaw}`);
+}
 
 // Connect to default postgres database to create our database
 const client = new Client({
@@ -16,7 +30,7 @@ const client = new Client({
   port: dbPort,
   user: dbUser,
   password: dbPassword,
-  database: "postgres", // Connect to default database first
+  database: dbMaintenanceDatabase,
 });
 
 async function initializeDatabase() {
