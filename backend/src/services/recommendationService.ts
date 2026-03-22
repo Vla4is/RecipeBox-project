@@ -20,6 +20,7 @@ export interface RecordAnonymousEventInput {
 export interface RecommendationRow extends RecipeRow {
   score: number;
   reason: string;
+  tags?: string[];
 }
 
 interface CandidateRow extends RecipeRow {
@@ -55,18 +56,18 @@ export async function recordAnonymousRecipeEvent(input: RecordAnonymousEventInpu
 export async function getHomeRecommendations(userid?: string, sessionId?: string, limit = 20): Promise<RecommendationRow[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 40);
   const candidates = await fetchCandidates();
+  const recipeTags = await fetchCandidateTags(candidates.map((candidate) => candidate.recipeid));
 
   if (!userid && !sessionId) {
-    return rankForAnonymous(candidates, safeLimit);
+    return rankForAnonymous(candidates, safeLimit, recipeTags);
   }
 
   if (sessionId && !userid) {
     // Anonymous user with session history
-    const [seenRecipeIds, tagPrefs, difficultyPrefs, recipeTags] = await Promise.all([
+    const [seenRecipeIds, tagPrefs, difficultyPrefs] = await Promise.all([
       fetchAnonymousSeenRecipes(sessionId),
       fetchAnonymousTagPreferences(sessionId),
       fetchAnonymousDifficultyPreferences(sessionId),
-      fetchCandidateTags(candidates.map((candidate) => candidate.recipeid)),
     ]);
 
     return rankForUser({
@@ -79,25 +80,24 @@ export async function getHomeRecommendations(userid?: string, sessionId?: string
     });
   }
 
-  if (!userid) {
-    return rankForAnonymous(candidates, safeLimit);
+  if (userid) {
+    const [seenRecipeIds, tagPrefs, difficultyPrefs] = await Promise.all([
+      fetchUserSeenRecipes(userid),
+      fetchUserTagPreferences(userid),
+      fetchUserDifficultyPreferences(userid),
+    ]);
+
+    return rankForUser({
+      candidates,
+      safeLimit,
+      seenRecipeIds,
+      tagPrefs,
+      difficultyPrefs,
+      recipeTags,
+    });
   }
 
-  const [seenRecipeIds, tagPrefs, difficultyPrefs, recipeTags] = await Promise.all([
-    fetchUserSeenRecipes(userid),
-    fetchUserTagPreferences(userid),
-    fetchUserDifficultyPreferences(userid),
-    fetchCandidateTags(candidates.map((candidate) => candidate.recipeid)),
-  ]);
-
-  return rankForUser({
-    candidates,
-    safeLimit,
-    seenRecipeIds,
-    tagPrefs,
-    difficultyPrefs,
-    recipeTags,
-  });
+  return rankForAnonymous(candidates, safeLimit, recipeTags);
 }
 
 async function fetchCandidates(): Promise<CandidateRow[]> {
@@ -282,7 +282,7 @@ async function fetchCandidateTags(recipeIds: string[]): Promise<Map<string, stri
   return map;
 }
 
-function rankForAnonymous(candidates: CandidateRow[], limit: number): RecommendationRow[] {
+function rankForAnonymous(candidates: CandidateRow[], limit: number, recipeTags: Map<string, string[]>): RecommendationRow[] {
   const maxPopularity = getMaxPopularity(candidates);
   const shuffled = [...candidates].sort(() => Math.random() - 0.5);
 
@@ -296,6 +296,7 @@ function rankForAnonymous(candidates: CandidateRow[], limit: number): Recommenda
         ...toRecipeRow(candidate),
         score,
         reason: popularityScore > 0.1 ? "Trending recipe" : "Popular pick",
+        tags: recipeTags.get(candidate.recipeid) || [],
       };
     })
     .sort((a, b) => b.score - a.score)
@@ -334,6 +335,7 @@ function rankForUser(params: {
         ...toRecipeRow(candidate),
         score,
         reason: chooseReason(tagScore, difficultyScore, popularityScore, freshnessScore),
+        tags: recipeTags.get(candidate.recipeid) || [],
       };
     })
     .sort((a, b) => b.score - a.score)
@@ -344,7 +346,7 @@ function rankForUser(params: {
   }
 
   const usedRecipeIds = new Set(personalized.map((item) => item.recipeid));
-  const fallback = rankForAnonymous(candidates, safeLimit * 2)
+  const fallback = rankForAnonymous(candidates, safeLimit * 2, recipeTags)
     .filter((item) => !usedRecipeIds.has(item.recipeid))
     .slice(0, safeLimit - personalized.length);
 

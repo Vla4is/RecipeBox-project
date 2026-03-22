@@ -22,6 +22,7 @@ interface RecipeFromDB {
 interface HomeRecommendation extends RecipeFromDB {
   score?: number;
   reason?: string;
+  tags?: string[];
 }
 
 interface RecipeTimeRanges {
@@ -523,9 +524,16 @@ function Home() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
               style={{ minWidth: 260, maxWidth: 260, height: 320, position: "relative", borderRadius: 16, overflow: "hidden", margin: "0 0", background: "#222", display: "flex", alignItems: "flex-end", justifyContent: "center", touchAction: "none", cursor: "pointer" }}
-              onClick={() => {
-                void trackRecipeClick(r.recipeid);
-                navigate(`/recipes/${r.recipeid}`);
+              onMouseDown={(e) => {
+                (e.currentTarget as any).__holdStartTime = Date.now();
+              }}
+              onClick={(e) => {
+                // Check if mouse was held for more than 200ms
+                const holdTime = Date.now() - ((e.currentTarget as any).__holdStartTime || 0);
+                if (holdTime < 200) {
+                  void trackRecipeClick(r.recipeid);
+                  navigate(`/recipes/${r.recipeid}`);
+                }
               }}
             >
               <img
@@ -534,6 +542,14 @@ function Home() {
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
                 draggable={false}
               />
+              <div style={{ position: "absolute", top: 0, left: 0, width: "100%", padding: "8px", display: "flex", flexWrap: "wrap", gap: "4px", pointerEvents: "none" }}>
+                {r.difficulty && (
+                  <span style={{ background: r.difficulty === "EASY" ? "#4ade80" : r.difficulty === "MEDIUM" ? "#fbbf24" : "#f87171", color: "#000", fontSize: "11px", fontWeight: "bold", padding: "2px 6px", borderRadius: "4px", textTransform: "uppercase" }}>{r.difficulty}</span>
+                )}
+                {r.tags && r.tags.slice(0, 2).map((tag) => (
+                  <span key={tag} style={{ background: "#333", color: "#fff", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}>{tag}</span>
+                ))}
+              </div>
               <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "monospace", fontWeight: 600, fontSize: 20, padding: "12px 0", textAlign: "center", pointerEvents: "none" }}>{r.title}</div>
             </motion.div>
           ))}
@@ -606,12 +622,47 @@ function Carousel({ children }: { children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const [maxDrag, setMaxDrag] = useState(0);
+  const [x, setX] = useState(0);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+  const [isHolding, setIsHolding] = useState(false);
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const recalculate = () => {
     if (containerRef.current && trackRef.current) {
       const trackWidth = trackRef.current.scrollWidth;
       const containerWidth = containerRef.current.offsetWidth;
       setMaxDrag(Math.max(0, trackWidth - containerWidth));
+      setCanScrollRight(true);
+      setCanScrollLeft(false);
+    }
+  };
+
+  const scrollBy = (distance: number) => {
+    setX((prevX) => {
+      const newX = Math.max(-maxDrag, Math.min(0, prevX + distance));
+      setCanScrollLeft(newX < 0);
+      setCanScrollRight(newX > -maxDrag);
+      return newX;
+    });
+  };
+
+  const startContinuousScroll = (direction: "left" | "right") => {
+    if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+    
+    setIsHolding(true);
+    
+    scrollIntervalRef.current = setInterval(() => {
+      const distance = direction === "right" ? -60 : 60;
+      scrollBy(distance);
+    }, 50);
+  };
+
+  const stopContinuousScroll = () => {
+    setIsHolding(false);
+    if (scrollIntervalRef.current) {
+      clearInterval(scrollIntervalRef.current);
+      scrollIntervalRef.current = null;
     }
   };
 
@@ -621,34 +672,123 @@ function Carousel({ children }: { children: React.ReactNode }) {
     return () => {
       clearTimeout(timeout);
       window.removeEventListener("resize", recalculate);
+      stopContinuousScroll();
     };
   }, [children]);
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", maxWidth: "100%", overflow: "hidden", padding: "32px 0", boxSizing: "border-box" }}
-    >
-      <motion.div
-        ref={trackRef}
-        style={{ display: "flex", gap: 32, cursor: "grab", padding: "8px 32px", width: "max-content", userSelect: "none" }}
-        drag="x"
-        dragConstraints={{ left: -maxDrag, right: 0 }}
-        whileTap={{ cursor: "grabbing" }}
-        dragMomentum={true}
-        dragTransition={{ bounceStiffness: 300, bounceDamping: 30, power: 0.3, timeConstant: 400 }}
-        dragElastic={0.08}
-        dragPropagation={false}
-        onPointerDownCapture={(e: PointerEvent<HTMLDivElement>) => {
-          // Prevent child elements from stealing the pointer so drag works on cards too
-          const target = e.target as HTMLElement;
-          if (target.tagName === "IMG") {
-            e.preventDefault();
-          }
-        }}
+    <div style={{ position: "relative", width: "100%", userSelect: "none" }}>
+      <div
+        ref={containerRef}
+        style={{ width: "100%", maxWidth: "100%", overflow: "hidden", padding: "32px 0", boxSizing: "border-box" }}
       >
-        {children}
-      </motion.div>
+        <motion.div
+          ref={trackRef}
+          style={{ display: "flex", gap: 32, cursor: "grab", padding: "8px 32px", width: "max-content", userSelect: "none" }}
+          animate={{ x }}
+          transition={isHolding ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }}
+          drag="x"
+          dragConstraints={{ left: -maxDrag, right: 0 }}
+          whileTap={{ cursor: "grabbing" }}
+          dragMomentum={true}
+          dragElastic={0.08}
+          dragPropagation={false}
+          onDragEnd={(e, info) => {
+            setX((prevX) => {
+              // PanInfo has offset, not absolute x; compute next position from previous x.
+              const nextX = Math.max(-maxDrag, Math.min(0, prevX + info.offset.x));
+              const edgeTolerance = 0.5;
+              setCanScrollLeft(nextX < -edgeTolerance);
+              setCanScrollRight(nextX > -maxDrag + edgeTolerance);
+              return nextX;
+            });
+          }}
+          onPointerDownCapture={(e: PointerEvent<HTMLDivElement>) => {
+            const target = e.target as HTMLElement;
+            if (target.tagName === "IMG") {
+              e.preventDefault();
+            }
+          }}
+        >
+          {children}
+        </motion.div>
+      </div>
+
+      {/* Left Arrow Button - Modern Style */}
+      <motion.button
+        onMouseDown={() => canScrollLeft && startContinuousScroll("left")}
+        onMouseUp={stopContinuousScroll}
+        onMouseLeave={stopContinuousScroll}
+        onClick={() => canScrollLeft && !isHolding && scrollBy(292)}
+        disabled={!canScrollLeft}
+        style={{
+          position: "absolute",
+          left: "16px",
+          top: "50%",
+          width: "56px",
+          height: "56px",
+          borderRadius: "12px",
+          background: canScrollLeft 
+            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" 
+            : "linear-gradient(135deg, #999 0%, #666 100%)",
+          color: "#fff",
+          border: "none",
+          fontSize: "24px",
+          fontWeight: "bold",
+          cursor: canScrollLeft ? "pointer" : "not-allowed",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10,
+          boxShadow: canScrollLeft ? "0 4px 16px rgba(102, 126, 234, 0.4)" : "none",
+          transition: "all 0.2s ease",
+          padding: 0,
+        }}
+        whileHover={canScrollLeft ? { scale: 1.1, boxShadow: "0 8px 24px rgba(102, 126, 234, 0.6)" } : {}}
+        whileTap={canScrollLeft ? { scale: 0.95 } : {}}
+        initial={{ y: "-50%" }}
+        animate={{ y: "-50%" }}
+      >
+        ❮
+      </motion.button>
+
+      {/* Right Arrow Button - Modern Style */}
+      <motion.button
+        onMouseDown={() => canScrollRight && startContinuousScroll("right")}
+        onMouseUp={stopContinuousScroll}
+        onMouseLeave={stopContinuousScroll}
+        onClick={() => canScrollRight && !isHolding && scrollBy(-292)}
+        disabled={!canScrollRight}
+        style={{
+          position: "absolute",
+          right: "16px",
+          top: "50%",
+          width: "56px",
+          height: "56px",
+          borderRadius: "12px",
+          background: canScrollRight 
+            ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" 
+            : "linear-gradient(135deg, #999 0%, #666 100%)",
+          color: "#fff",
+          border: "none",
+          fontSize: "24px",
+          fontWeight: "bold",
+          cursor: canScrollRight ? "pointer" : "not-allowed",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10,
+          boxShadow: canScrollRight ? "0 4px 16px rgba(102, 126, 234, 0.4)" : "none",
+          transition: "all 0.2s ease",
+          padding: 0,
+        }}
+        whileHover={canScrollRight ? { scale: 1.1, boxShadow: "0 8px 24px rgba(102, 126, 234, 0.6)" } : {}}
+        whileTap={canScrollRight ? { scale: 0.95 } : {}}
+        initial={{ y: "-50%" }}
+        animate={{ y: "-50%" }}
+      >
+        ❯
+      </motion.button>
     </div>
   );
 }
