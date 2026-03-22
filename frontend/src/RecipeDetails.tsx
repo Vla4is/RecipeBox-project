@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import "./App.css";
 
 type Recipe = {
@@ -77,9 +77,18 @@ const fadeUp = {
 
 export default function RecipeDetails() {
   const { recipeId } = useParams<{ recipeId: string }>();
+  const navigate = useNavigate();
   const [data, setData] = useState<RecipeDetailsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const handleBackToPrevious = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/", { replace: true });
+  };
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -149,7 +158,14 @@ export default function RecipeDetails() {
       <div className="rd-state">
         <span className="rd-state-icon">😕</span>
         <p className="rd-state-msg">{error || "Recipe not found"}</p>
-        <Link to="/" className="rd-state-link">← Back to community</Link>
+        <button
+          type="button"
+          className="rd-state-link"
+          onClick={handleBackToPrevious}
+          style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+        >
+          ← Back to community
+        </button>
       </div>
     );
   }
@@ -176,9 +192,14 @@ export default function RecipeDetails() {
         <div className="rd-hero-fade" />
 
         <div className="rd-hero-inner">
-          <Link to="/" className="rd-back">
+          <button
+            type="button"
+            className="rd-back"
+            onClick={handleBackToPrevious}
+            style={{ background: "none", border: "none", padding: 0, cursor: "pointer" }}
+          >
             <span className="rd-back-arrow">←</span> Community Recipes
-          </Link>
+          </button>
 
           <motion.h1
             className="rd-title"

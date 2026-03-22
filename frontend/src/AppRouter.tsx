@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, useLocation, useNavigationType } from "react-router-dom";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import Home from "./Home";
 import RegistrationForm from "./RegistrationForm";
 import LoginForm from "./LoginForm";
@@ -12,6 +12,64 @@ import RecipeDetails from "./RecipeDetails";
 import MyRecipes from "./MyRecipes";
 import EditRecipe from "./EditRecipe";
 import { getTokenExpiryMs, isTokenExpired } from "./auth";
+
+const SCROLL_POSITIONS_KEY = "itsystems_scroll_positions_v1";
+
+function ScrollRestorationManager() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const positionsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(SCROLL_POSITIONS_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      if (parsed && typeof parsed === "object") {
+        positionsRef.current = parsed;
+      }
+    } catch {
+      positionsRef.current = {};
+    }
+  }, []);
+
+  useEffect(() => {
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const positionKey = location.key || `${location.pathname}${location.search}${location.hash}`;
+
+    if (navigationType === "POP") {
+      const targetY = positionsRef.current[positionKey] ?? 0;
+      let attempt = 0;
+      const maxAttempts = 12;
+      const restore = () => {
+        window.scrollTo(0, targetY);
+        attempt += 1;
+        const pageHeight = document.documentElement.scrollHeight;
+        const canReachTarget = pageHeight >= targetY + window.innerHeight;
+        if (!canReachTarget && attempt < maxAttempts) {
+          window.setTimeout(restore, 50);
+        }
+      };
+      restore();
+    } else {
+      window.scrollTo(0, 0);
+    }
+
+    return () => {
+      positionsRef.current[positionKey] = window.scrollY;
+      sessionStorage.setItem(SCROLL_POSITIONS_KEY, JSON.stringify(positionsRef.current));
+    };
+  }, [location.key, location.pathname, location.search, location.hash, navigationType]);
+
+  return null;
+}
 
 export default function AppRouter() {
   // Persist login state in localStorage
@@ -54,6 +112,7 @@ export default function AppRouter() {
 
   return (
     <BrowserRouter>
+      <ScrollRestorationManager />
       <Navbar loggedIn={!!token} onLogout={handleLogout} />
       <Routes>
         <Route path="/" element={<Home />} />

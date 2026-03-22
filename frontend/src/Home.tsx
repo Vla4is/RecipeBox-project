@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { motion, useMotionValue, animate } from "framer-motion";
 import "./App.css";
 
@@ -25,6 +25,12 @@ interface HomeRecommendation extends RecipeFromDB {
   tags?: string[];
 }
 
+interface HomeTagSection {
+  tag: string;
+  totalRecipes: number;
+  recipes: RecipeFromDB[];
+}
+
 interface RecipeTimeRanges {
   minPrepTime: number;
   maxPrepTime: number;
@@ -34,10 +40,20 @@ interface RecipeTimeRanges {
 
 type DifficultyFilter = "EASY" | "MEDIUM" | "HARD";
 
+interface HomeViewState {
+  searchTerm: string;
+  maxPrepTime: number;
+  maxCookTime: number;
+  totalTime: number;
+  selectedDifficulty: DifficultyFilter | null;
+  showSearchResults: boolean;
+}
+
 const CARD_MIN_WIDTH = 260;
 const GRID_GAP = 32;
 const GRID_PADDING = 32;
 const MAX_CAROUSEL_ITEMS = 14;
+const HOME_VIEW_STATE_KEY = "itsystems_home_view_state_v1";
 
 const DEFAULT_TIME_RANGES: RecipeTimeRanges = {
   minPrepTime: 0,
@@ -63,6 +79,30 @@ function getOrCreateSessionId(): string {
     localStorage.setItem("recipe_session_id", sessionId);
   }
   return sessionId;
+}
+
+function loadHomeViewState(): Partial<HomeViewState> {
+  const raw = sessionStorage.getItem(HOME_VIEW_STATE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Partial<HomeViewState>;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function parseDifficultyFilter(value: string | null): DifficultyFilter | null {
+  const upper = (value || "").toUpperCase();
+  if (upper === "EASY" || upper === "MEDIUM" || upper === "HARD") return upper;
+  return null;
+}
+
+function parseOptionalNumber(value: string | null): number | undefined {
+  if (value == null) return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 async function trackRecipeClick(recipeId: string): Promise<void> {
@@ -104,20 +144,51 @@ function getFullRowItems(items: RecipeFromDB[], containerWidth: number): RecipeF
   return items.slice(0, fullRowCount || cols); // at least 1 row
 }
 
+function getTwoEqualRowsItems(items: RecipeFromDB[], containerWidth: number): RecipeFromDB[] {
+  if (containerWidth <= 0 || items.length === 0) return [];
+  const available = containerWidth - GRID_PADDING * 2;
+  const cols = Math.max(1, Math.floor((available + GRID_GAP) / (CARD_MIN_WIDTH + GRID_GAP)));
+  const required = cols * 2;
+  if (items.length < required) return [];
+  return items.slice(0, required);
+}
+
 function Home() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const initialHomeViewState = useMemo(() => {
+    const persisted = loadHomeViewState();
+    const urlParams = new URLSearchParams(window.location.search);
+
+    const qParam = urlParams.get("q");
+    const prepParam = parseOptionalNumber(urlParams.get("maxPrepTime"));
+    const cookParam = parseOptionalNumber(urlParams.get("maxCookTime"));
+    const difficultyParam = parseDifficultyFilter(urlParams.get("difficulty"));
+    const hasAnyUrlFilter = qParam !== null || prepParam !== undefined || cookParam !== undefined || difficultyParam !== null;
+
+    return {
+      searchTerm: qParam ?? persisted.searchTerm ?? "",
+      maxPrepTime: prepParam ?? persisted.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime,
+      maxCookTime: cookParam ?? persisted.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime,
+      totalTime: (prepParam ?? persisted.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime) + (cookParam ?? persisted.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime),
+      selectedDifficulty: difficultyParam ?? persisted.selectedDifficulty ?? null,
+      showSearchResults: hasAnyUrlFilter ? true : (persisted.showSearchResults ?? false),
+    };
+  }, []);
   const navigate = useNavigate();
   const [dbRecipes, setDbRecipes] = useState<RecipeFromDB[]>([]);
   const [recommendedRecipes, setRecommendedRecipes] = useState<HomeRecommendation[]>([]);
+  const [homeSections, setHomeSections] = useState<HomeTagSection[]>([]);
   const [searchResults, setSearchResults] = useState<RecipeFromDB[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(initialHomeViewState.searchTerm ?? "");
+  const [showSearchResults, setShowSearchResults] = useState(initialHomeViewState.showSearchResults ?? false);
   const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [timeRanges, setTimeRanges] = useState<RecipeTimeRanges>(DEFAULT_TIME_RANGES);
-  const [maxPrepTime, setMaxPrepTime] = useState(DEFAULT_TIME_RANGES.maxPrepTime);
-  const [maxCookTime, setMaxCookTime] = useState(DEFAULT_TIME_RANGES.maxCookTime);
-  const [totalTime, setTotalTime] = useState(DEFAULT_TIME_RANGES.maxPrepTime + DEFAULT_TIME_RANGES.maxCookTime);
-  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter | null>(null);
+  const [maxPrepTime, setMaxPrepTime] = useState(initialHomeViewState.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime);
+  const [maxCookTime, setMaxCookTime] = useState(initialHomeViewState.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime);
+  const [totalTime, setTotalTime] = useState(initialHomeViewState.totalTime ?? (DEFAULT_TIME_RANGES.maxPrepTime + DEFAULT_TIME_RANGES.maxCookTime));
+  const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter | null>(initialHomeViewState.selectedDifficulty ?? null);
   const [isSearchUiFocused, setIsSearchUiFocused] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const searchUiRef = useRef<HTMLDivElement>(null);
@@ -134,16 +205,18 @@ function Home() {
       : `/api/recommendations/home?limit=14&sessionId=${encodeURIComponent(sessionId)}`;
 
     Promise.all([
-      fetch("/api/recipes").then((r) => r.json()),
+      fetch("/api/recipes/home-sections?tagLimit=5&recipesPerTag=24", { headers }).then((r) => r.json()),
       fetch("/api/recipes/time-ranges", { headers }).then((r) => r.json()),
       fetch(recommendationsUrl, { headers }).then((r) => r.json()),
     ])
-      .then(([recipesData, rangesData, recommendationsData]) => {
-        const allRecipes = Array.isArray(recipesData.recipes) ? recipesData.recipes : [];
+      .then(([sectionsData, rangesData, recommendationsData]) => {
+        const fetchedSections = Array.isArray(sectionsData.sections) ? sectionsData.sections : [];
+        const allRecipes = fetchedSections.flatMap((section: HomeTagSection) => section.recipes || []);
         const fetchedRecommendations = Array.isArray(recommendationsData.recommendations)
           ? recommendationsData.recommendations
           : [];
 
+        setHomeSections(fetchedSections);
         setDbRecipes(allRecipes);
         setRecommendedRecipes(fetchedRecommendations);
 
@@ -155,16 +228,62 @@ function Home() {
         };
 
         setTimeRanges(nextRanges);
-        setMaxPrepTime(nextRanges.maxPrepTime);
-        setMaxCookTime(nextRanges.maxCookTime);
-        setTotalTime(nextRanges.maxPrepTime + nextRanges.maxCookTime);
+
+        const restoredMaxPrep = typeof initialHomeViewState.maxPrepTime === "number"
+          ? clamp(initialHomeViewState.maxPrepTime, nextRanges.minPrepTime, nextRanges.maxPrepTime)
+          : nextRanges.maxPrepTime;
+        const restoredMaxCook = typeof initialHomeViewState.maxCookTime === "number"
+          ? clamp(initialHomeViewState.maxCookTime, nextRanges.minCookTime, nextRanges.maxCookTime)
+          : nextRanges.maxCookTime;
+
+        const minTotal = nextRanges.minPrepTime + nextRanges.minCookTime;
+        const maxTotal = nextRanges.maxPrepTime + nextRanges.maxCookTime;
+        const restoredTotal = typeof initialHomeViewState.totalTime === "number"
+          ? clamp(initialHomeViewState.totalTime, minTotal, maxTotal)
+          : restoredMaxPrep + restoredMaxCook;
+
+        setMaxPrepTime(restoredMaxPrep);
+        setMaxCookTime(restoredMaxCook);
+        setTotalTime(restoredTotal);
       })
       .catch(() => {
+        setHomeSections([]);
         setDbRecipes([]);
         setRecommendedRecipes([]);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [initialHomeViewState.maxCookTime, initialHomeViewState.maxPrepTime, initialHomeViewState.totalTime]);
+
+  useEffect(() => {
+    const viewState: HomeViewState = {
+      searchTerm,
+      maxPrepTime,
+      maxCookTime,
+      totalTime,
+      selectedDifficulty,
+      showSearchResults,
+    };
+    sessionStorage.setItem(HOME_VIEW_STATE_KEY, JSON.stringify(viewState));
+  }, [searchTerm, maxPrepTime, maxCookTime, totalTime, selectedDifficulty, showSearchResults]);
+
+  useEffect(() => {
+    const term = searchTerm.trim();
+    const prepFilterActive = maxPrepTime < timeRanges.maxPrepTime;
+    const cookFilterActive = maxCookTime < timeRanges.maxCookTime;
+    const difficultyFilterActive = selectedDifficulty !== null;
+
+    const nextParams = new URLSearchParams();
+    if (term.length > 0) nextParams.set("q", term);
+    if (prepFilterActive) nextParams.set("maxPrepTime", String(maxPrepTime));
+    if (cookFilterActive) nextParams.set("maxCookTime", String(maxCookTime));
+    if (difficultyFilterActive && selectedDifficulty) nextParams.set("difficulty", selectedDifficulty);
+
+    const currentQuery = searchParams.toString();
+    const nextQuery = nextParams.toString();
+    if (currentQuery !== nextQuery) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchTerm, maxPrepTime, maxCookTime, selectedDifficulty, timeRanges.maxPrepTime, timeRanges.maxCookTime, searchParams, setSearchParams]);
 
   const handleResize = useCallback(() => {
     if (gridContainerRef.current) {
@@ -282,7 +401,7 @@ function Home() {
     setTotalTime(maxPrepTime + nextCook);
   };
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchTerm("");
     setMaxPrepTime(timeRanges.maxPrepTime);
     setMaxCookTime(timeRanges.maxCookTime);
@@ -291,16 +410,43 @@ function Home() {
     setSearchResults([]);
     setShowSearchResults(false);
     setIsSearchUiFocused(false);
-  };
+    setSearchParams(new URLSearchParams(), { replace: true });
+    sessionStorage.removeItem(HOME_VIEW_STATE_KEY);
+  }, [timeRanges.maxPrepTime, timeRanges.maxCookTime, setSearchParams]);
+
+  useEffect(() => {
+    const shouldReset = Boolean((location.state as { resetHome?: boolean } | null)?.resetHome);
+    if (!shouldReset) return;
+
+    clearFilters();
+    window.scrollTo(0, 0);
+    navigate("/", { replace: true, state: null });
+  }, [location.state, clearFilters, navigate]);
 
   const toggleDifficulty = (difficulty: DifficultyFilter) => {
     setSelectedDifficulty((prev) => (prev === difficulty ? null : difficulty));
   };
 
+  const handleTagSectionClick = (tag: string) => {
+    setSearchTerm(tag);
+    setSelectedDifficulty(null);
+    setShowSearchResults(true);
+    setIsSearchUiFocused(true);
+    window.scrollTo(0, 0);
+  };
+
   const showExpandedSearchUi = isSearchUiFocused || showSearchResults;
 
-  const activeRecipes = showSearchResults ? searchResults : dbRecipes;
-  const visibleRecipes = getFullRowItems(activeRecipes, containerWidth);
+  const visibleSearchRecipes = getFullRowItems(searchResults, containerWidth);
+  const visibleHomeSections = useMemo(
+    () => homeSections
+      .map((section) => ({
+        ...section,
+        recipes: getTwoEqualRowsItems(section.recipes || [], containerWidth),
+      }))
+      .filter((section) => section.recipes.length > 0),
+    [homeSections, containerWidth]
+  );
   const carouselRecipes = useMemo(() => {
     const source = recommendedRecipes.length > 0 ? recommendedRecipes : dbRecipes;
     return source.slice(0, MAX_CAROUSEL_ITEMS);
@@ -560,60 +706,140 @@ function Home() {
         </Carousel>
       </div>
 
-      {/* Database-driven grid for Explore All Recipes */}
+      {/* Compact feed: search results or curated tag sections */}
       <div style={{ width: "100%", padding: "16px 0 0" }}>
-        <h2 className="section-heading">{showSearchResults ? "Matching Recipes" : "Community Recipes"}</h2>
+        <h2 className="section-heading">{showSearchResults ? "Matching Recipes" : "Top Picks by Category"}</h2>
         <p className="section-subheading">
-          {showSearchResults ? "Same style, filtered instantly as you type" : "Shared by home cooks just like you"}
+          {showSearchResults
+            ? "Same style, filtered instantly as you type"
+            : "Curated from the most popular recipes to keep the page fast and focused"}
         </p>
       </div>
       <div ref={gridContainerRef} className="recipe-grid-container">
         {loading || isSearching ? (
           <p className="recipe-grid-loading">Loading recipes...</p>
-        ) : visibleRecipes.length === 0 ? (
-          <p className="recipe-grid-loading">No recipes found for the current search and filters</p>
-        ) : (
-          <div className="recipe-grid">
-            {visibleRecipes.map(r => (
-              <motion.div
-                key={r.recipeid}
-                className="recipe-card"
-                onClick={() => navigate(`/recipes/${r.recipeid}`)}
-                whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-              >
-                <div className="recipe-card-img-wrap">
-                  <img
-                    src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
-                    alt={r.title}
-                    className="recipe-card-img"
-                  />
-                  {r.difficulty && (
-                    <span className={`recipe-card-badge badge-${r.difficulty.toLowerCase()}`}>
-                      {r.difficulty}
-                    </span>
-                  )}
-                </div>
-                <div className="recipe-card-body">
-                  <h3 className="recipe-card-title">{r.title}</h3>
-                  {r.description && (
-                    <p className="recipe-card-desc">{r.description}</p>
-                  )}
-                  <div className="recipe-card-meta">
-                    {r.proptimemin != null && (
-                      <span className="recipe-card-meta-item">🥣 Prep {r.proptimemin} min</span>
-                    )}
-                    {r.cooktimemin != null && (
-                      <span className="recipe-card-meta-item">🕐 {r.cooktimemin} min</span>
-                    )}
-                    {r.servings != null && (
-                      <span className="recipe-card-meta-item">🍽️ {r.servings} servings</span>
+        ) : showSearchResults ? (
+          visibleSearchRecipes.length === 0 ? (
+            <p className="recipe-grid-loading">No recipes found for the current search and filters</p>
+          ) : (
+            <div className="recipe-grid">
+              {visibleSearchRecipes.map(r => (
+                <motion.div
+                  key={r.recipeid}
+                  className="recipe-card"
+                  onClick={() => navigate(`/recipes/${r.recipeid}`)}
+                  whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.4 }}
+                >
+                  <div className="recipe-card-img-wrap">
+                    <img
+                      src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
+                      alt={r.title}
+                      className="recipe-card-img"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    {r.difficulty && (
+                      <span className={`recipe-card-badge badge-${r.difficulty.toLowerCase()}`}>
+                        {r.difficulty}
+                      </span>
                     )}
                   </div>
+                  <div className="recipe-card-body">
+                    <h3 className="recipe-card-title">{r.title}</h3>
+                    {r.description && (
+                      <p className="recipe-card-desc">{r.description}</p>
+                    )}
+                    <div className="recipe-card-meta">
+                      {r.proptimemin != null && (
+                        <span className="recipe-card-meta-item">🥣 Prep {r.proptimemin} min</span>
+                      )}
+                      {r.cooktimemin != null && (
+                        <span className="recipe-card-meta-item">🕐 {r.cooktimemin} min</span>
+                      )}
+                      {r.servings != null && (
+                        <span className="recipe-card-meta-item">🍽️ {r.servings} servings</span>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )
+        ) : visibleHomeSections.length === 0 ? (
+          <p className="recipe-grid-loading">No featured categories available right now</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+            {visibleHomeSections.map((section) => (
+              <div key={section.tag}>
+                <button
+                  type="button"
+                  onClick={() => handleTagSectionClick(section.tag)}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    padding: 0,
+                    marginBottom: 12,
+                    cursor: "pointer",
+                    textTransform: "capitalize",
+                    fontSize: 24,
+                    fontWeight: 700,
+                    color: "#1f2937",
+                  }}
+                >
+                  #{section.tag}
+                  <span style={{ marginLeft: 10, fontSize: 14, fontWeight: 500, color: "#6b7280" }}>
+                    {section.totalRecipes} recipes
+                  </span>
+                </button>
+                <div className="recipe-grid">
+                  {section.recipes.map((r) => (
+                    <motion.div
+                      key={`${section.tag}-${r.recipeid}`}
+                      className="recipe-card"
+                      onClick={() => navigate(`/recipes/${r.recipeid}`)}
+                      whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+                      initial={{ opacity: 0, y: 30 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35 }}
+                    >
+                      <div className="recipe-card-img-wrap">
+                        <img
+                          src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
+                          alt={r.title}
+                          className="recipe-card-img"
+                          loading="lazy"
+                          decoding="async"
+                        />
+                        {r.difficulty && (
+                          <span className={`recipe-card-badge badge-${r.difficulty.toLowerCase()}`}>
+                            {r.difficulty}
+                          </span>
+                        )}
+                      </div>
+                      <div className="recipe-card-body">
+                        <h3 className="recipe-card-title">{r.title}</h3>
+                        {r.description && (
+                          <p className="recipe-card-desc">{r.description}</p>
+                        )}
+                        <div className="recipe-card-meta">
+                          {r.proptimemin != null && (
+                            <span className="recipe-card-meta-item">🥣 Prep {r.proptimemin} min</span>
+                          )}
+                          {r.cooktimemin != null && (
+                            <span className="recipe-card-meta-item">🕐 {r.cooktimemin} min</span>
+                          )}
+                          {r.servings != null && (
+                            <span className="recipe-card-meta-item">🍽️ {r.servings} servings</span>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         )}

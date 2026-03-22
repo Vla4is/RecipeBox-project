@@ -64,6 +64,142 @@ export interface RecipeTimeRanges {
   maxCookTime: number;
 }
 
+export interface HomeTagSection {
+  tag: string;
+  totalRecipes: number;
+  recipes: RecipeRow[];
+}
+
+export interface HomeTagSectionsInput {
+  tagLimit?: number;
+  recipesPerTag?: number;
+}
+
+export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Promise<HomeTagSection[]> {
+  const safeTagLimit = Math.min(Math.max(input.tagLimit ?? 5, 1), 10);
+  const safeRecipesPerTag = Math.min(Math.max(input.recipesPerTag ?? 8, 1), 16);
+
+  const res = await pool.query(
+    `WITH recipe_popularity AS (
+       SELECT recipeid,
+              SUM(weight)::float AS popularity_score
+       FROM (
+         SELECT recipeid,
+                CASE event_type
+                  WHEN 'VIEW' THEN 1
+                  WHEN 'CLICK' THEN 2
+                  WHEN 'SAVE' THEN 4
+                  ELSE 0
+                END AS weight
+         FROM user_recipe_events
+         UNION ALL
+         SELECT recipeid,
+                CASE event_type
+                  WHEN 'VIEW' THEN 1
+                  WHEN 'CLICK' THEN 2
+                  WHEN 'SAVE' THEN 4
+                  ELSE 0
+                END AS weight
+         FROM anonymous_recipe_events
+       ) all_events
+       GROUP BY recipeid
+     ),
+     top_tags AS (
+       SELECT LOWER(t.name) AS tag,
+              COUNT(DISTINCT t.recipeid)::int AS recipe_count,
+              COALESCE(SUM(rp.popularity_score), 0)::float AS tag_popularity
+       FROM tags t
+       JOIN recipes r ON r.recipeid = t.recipeid
+       LEFT JOIN recipe_popularity rp ON rp.recipeid = t.recipeid
+       WHERE r.visibility = 'PUBLIC'
+       GROUP BY LOWER(t.name)
+       ORDER BY (COALESCE(SUM(rp.popularity_score), 0) + COUNT(DISTINCT t.recipeid) * 2) DESC,
+                LOWER(t.name) ASC
+       LIMIT $1
+     ),
+     tagged_recipes AS (
+       SELECT DISTINCT
+         LOWER(t.name) AS tag,
+         tt.recipe_count,
+         r.recipeid,
+         r.userid,
+         r.title,
+         r.description,
+         r.image_url,
+         r.proptimemin,
+         r.cooktimemin,
+         r.servings,
+         r.difficulty,
+         r.visibility,
+         r.created_at,
+         r.updated_at,
+         COALESCE(rp.popularity_score, 0)::float AS popularity_score
+       FROM top_tags tt
+       JOIN tags t ON LOWER(t.name) = tt.tag
+       JOIN recipes r ON r.recipeid = t.recipeid
+       LEFT JOIN recipe_popularity rp ON rp.recipeid = r.recipeid
+       WHERE r.visibility = 'PUBLIC'
+     ),
+     ranked AS (
+       SELECT tr.*, ROW_NUMBER() OVER (
+         PARTITION BY tr.tag
+         ORDER BY tr.popularity_score DESC, tr.created_at DESC
+       ) AS rank_in_tag
+       FROM tagged_recipes tr
+     )
+     SELECT tag,
+            recipe_count,
+            recipeid,
+            userid,
+            title,
+            description,
+            image_url,
+            proptimemin,
+            cooktimemin,
+            servings,
+            difficulty,
+            visibility,
+            created_at,
+            updated_at
+     FROM ranked
+     WHERE rank_in_tag <= $2
+     ORDER BY tag ASC, rank_in_tag ASC`,
+    [safeTagLimit, safeRecipesPerTag]
+  );
+
+  const grouped = new Map<string, HomeTagSection>();
+  for (const row of res.rows as Array<RecipeRow & { tag: string; recipe_count: number }>) {
+    const existing = grouped.get(row.tag);
+    const recipe: RecipeRow = {
+      recipeid: row.recipeid,
+      userid: row.userid,
+      title: row.title,
+      description: row.description,
+      image_url: row.image_url,
+      proptimemin: row.proptimemin,
+      cooktimemin: row.cooktimemin,
+      servings: row.servings,
+      difficulty: row.difficulty,
+      visibility: row.visibility,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+
+    if (!existing) {
+      grouped.set(row.tag, {
+        tag: row.tag,
+        totalRecipes: Number(row.recipe_count) || 0,
+        recipes: [recipe],
+      });
+      continue;
+    }
+
+    existing.recipes.push(recipe);
+  }
+
+  return Array.from(grouped.values());
+}
+
 export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRow[]> {
   const normalizedTerm = (input.searchTerm || "").trim();
   const pattern = `%${normalizedTerm}%`;

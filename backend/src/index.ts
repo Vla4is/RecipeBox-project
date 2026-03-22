@@ -14,6 +14,7 @@ import {
   getRecipeDetailsForOwner,
   searchRecipes,
   getRecipeTimeRanges,
+  getHomeTagSections,
 } from "./services/recipeService";
 import {
   getHomeRecommendations,
@@ -123,6 +124,26 @@ app.get("/api/recipes/time-ranges", async (req: Request, res: Response) => {
     return res.json(ranges);
   } catch (err) {
     console.error("Error fetching recipe time ranges:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/recipes/home-sections", async (req: Request, res: Response) => {
+  try {
+    const rawTagLimit = req.query.tagLimit;
+    const rawRecipesPerTag = req.query.recipesPerTag;
+
+    const parsedTagLimit = Number(Array.isArray(rawTagLimit) ? rawTagLimit[0] : rawTagLimit);
+    const parsedRecipesPerTag = Number(Array.isArray(rawRecipesPerTag) ? rawRecipesPerTag[0] : rawRecipesPerTag);
+
+    const sections = await getHomeTagSections({
+      tagLimit: Number.isFinite(parsedTagLimit) ? parsedTagLimit : undefined,
+      recipesPerTag: Number.isFinite(parsedRecipesPerTag) ? parsedRecipesPerTag : undefined,
+    });
+
+    return res.json({ sections });
+  } catch (err) {
+    console.error("Error fetching home sections:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

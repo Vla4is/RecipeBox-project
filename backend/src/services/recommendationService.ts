@@ -153,12 +153,15 @@ async function fetchUserTagPreferences(userid: string): Promise<Map<string, numb
   const res = await pool.query(
     `SELECT t.name,
             SUM(
-              CASE e.event_type
-                WHEN 'VIEW' THEN 1
-                WHEN 'CLICK' THEN 2
-                WHEN 'SAVE' THEN 4
-                ELSE 0
-              END
+              (
+                CASE e.event_type
+                  WHEN 'VIEW' THEN 1
+                  WHEN 'CLICK' THEN 2
+                  WHEN 'SAVE' THEN 4
+                  ELSE 0
+                END
+              )
+              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 18)
             )::float AS weight
      FROM user_recipe_events e
      JOIN tags t ON t.recipeid = e.recipeid
@@ -181,12 +184,15 @@ async function fetchAnonymousTagPreferences(sessionId: string): Promise<Map<stri
   const res = await pool.query(
     `SELECT t.name,
             SUM(
-              CASE e.event_type
-                WHEN 'VIEW' THEN 1
-                WHEN 'CLICK' THEN 2
-                WHEN 'SAVE' THEN 4
-                ELSE 0
-              END
+              (
+                CASE e.event_type
+                  WHEN 'VIEW' THEN 1
+                  WHEN 'CLICK' THEN 2
+                  WHEN 'SAVE' THEN 4
+                  ELSE 0
+                END
+              )
+              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 18)
             )::float AS weight
      FROM anonymous_recipe_events e
      JOIN tags t ON t.recipeid = e.recipeid
@@ -209,12 +215,15 @@ async function fetchUserDifficultyPreferences(userid: string): Promise<Map<strin
   const res = await pool.query(
     `SELECT r.difficulty,
             SUM(
-              CASE e.event_type
-                WHEN 'VIEW' THEN 1
-                WHEN 'CLICK' THEN 2
-                WHEN 'SAVE' THEN 4
-                ELSE 0
-              END
+              (
+                CASE e.event_type
+                  WHEN 'VIEW' THEN 1
+                  WHEN 'CLICK' THEN 2
+                  WHEN 'SAVE' THEN 4
+                  ELSE 0
+                END
+              )
+              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 28)
             )::float AS weight
      FROM user_recipe_events e
      JOIN recipes r ON r.recipeid = e.recipeid
@@ -237,12 +246,15 @@ async function fetchAnonymousDifficultyPreferences(sessionId: string): Promise<M
   const res = await pool.query(
     `SELECT r.difficulty,
             SUM(
-              CASE e.event_type
-                WHEN 'VIEW' THEN 1
-                WHEN 'CLICK' THEN 2
-                WHEN 'SAVE' THEN 4
-                ELSE 0
-              END
+              (
+                CASE e.event_type
+                  WHEN 'VIEW' THEN 1
+                  WHEN 'CLICK' THEN 2
+                  WHEN 'SAVE' THEN 4
+                  ELSE 0
+                END
+              )
+              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 28)
             )::float AS weight
      FROM anonymous_recipe_events e
      JOIN recipes r ON r.recipeid = e.recipeid
@@ -328,7 +340,7 @@ function rankForUser(params: {
 
       const hasPersonalSignals = maxTagWeight > 0 || maxDifficultyWeight > 0;
       const score = hasPersonalSignals
-        ? 0.5 * tagScore + 0.2 * difficultyScore + 0.2 * popularityScore + 0.1 * freshnessScore
+        ? 0.6 * tagScore + 0.1 * difficultyScore + 0.2 * popularityScore + 0.1 * freshnessScore
         : 0.6 * popularityScore + 0.4 * freshnessScore;
 
       return {
