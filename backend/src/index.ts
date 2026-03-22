@@ -160,9 +160,11 @@ app.get("/api/recipes/search", async (req: Request, res: Response) => {
     const rawMaxPrep = req.query.maxPrepTime;
     const rawMaxCook = req.query.maxCookTime;
     const rawDifficulty = req.query.difficulty;
+    const rawLimit = req.query.limit;
 
     const parsedMaxPrep = Number(Array.isArray(rawMaxPrep) ? rawMaxPrep[0] : rawMaxPrep);
     const parsedMaxCook = Number(Array.isArray(rawMaxCook) ? rawMaxCook[0] : rawMaxCook);
+    const parsedLimit = Number(Array.isArray(rawLimit) ? rawLimit[0] : rawLimit);
     const parsedDifficulties = (Array.isArray(rawDifficulty) ? rawDifficulty : [rawDifficulty])
       .filter((v): v is string => typeof v === "string")
       .map((v) => v.toUpperCase())
@@ -174,6 +176,7 @@ app.get("/api/recipes/search", async (req: Request, res: Response) => {
       maxPrepTime: Number.isFinite(parsedMaxPrep) ? parsedMaxPrep : undefined,
       maxCookTime: Number.isFinite(parsedMaxCook) ? parsedMaxCook : undefined,
       difficulties: parsedDifficulties,
+      limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     });
 
     return res.json({ recipes });

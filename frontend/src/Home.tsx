@@ -39,6 +39,7 @@ interface RecipeTimeRanges {
 }
 
 type DifficultyFilter = "EASY" | "MEDIUM" | "HARD";
+type SearchSort = "relevance" | "total-time-asc" | "total-time-desc" | "title-asc" | "title-desc";
 
 interface HomeViewState {
   searchTerm: string;
@@ -46,6 +47,7 @@ interface HomeViewState {
   maxCookTime: number;
   totalTime: number;
   selectedDifficulty: DifficultyFilter | null;
+  searchSort: SearchSort;
   showSearchResults: boolean;
 }
 
@@ -55,6 +57,9 @@ const GRID_PADDING = 32;
 const MAX_CAROUSEL_ITEMS = 14;
 const HOME_VIEW_STATE_KEY = "itsystems_home_view_state_v1";
 const DEFAULT_CAROUSEL_IMAGE = "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg";
+const SEARCH_FETCH_LIMIT = 60;
+const SEARCH_INITIAL_VISIBLE = 12;
+const SEARCH_LOAD_MORE_STEP = 12;
 
 const DEFAULT_TIME_RANGES: RecipeTimeRanges = {
   minPrepTime: 0,
@@ -98,6 +103,19 @@ function parseDifficultyFilter(value: string | null): DifficultyFilter | null {
   const upper = (value || "").toUpperCase();
   if (upper === "EASY" || upper === "MEDIUM" || upper === "HARD") return upper;
   return null;
+}
+
+function parseSearchSort(value: string | null): SearchSort {
+  const normalized = (value || "").toLowerCase();
+  if (
+    normalized === "total-time-asc" ||
+    normalized === "total-time-desc" ||
+    normalized === "title-asc" ||
+    normalized === "title-desc"
+  ) {
+    return normalized;
+  }
+  return "relevance";
 }
 
 function parseOptionalNumber(value: string | null): number | undefined {
@@ -165,7 +183,13 @@ function Home() {
     const prepParam = parseOptionalNumber(urlParams.get("maxPrepTime"));
     const cookParam = parseOptionalNumber(urlParams.get("maxCookTime"));
     const difficultyParam = parseDifficultyFilter(urlParams.get("difficulty"));
-    const hasAnyUrlFilter = qParam !== null || prepParam !== undefined || cookParam !== undefined || difficultyParam !== null;
+    const sortParam = parseSearchSort(urlParams.get("sort"));
+    const hasAnyUrlFilter =
+      qParam !== null ||
+      prepParam !== undefined ||
+      cookParam !== undefined ||
+      difficultyParam !== null ||
+      sortParam !== "relevance";
 
     return {
       searchTerm: qParam ?? persisted.searchTerm ?? "",
@@ -173,6 +197,7 @@ function Home() {
       maxCookTime: cookParam ?? persisted.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime,
       totalTime: (prepParam ?? persisted.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime) + (cookParam ?? persisted.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime),
       selectedDifficulty: difficultyParam ?? persisted.selectedDifficulty ?? null,
+      searchSort: sortParam || persisted.searchSort || "relevance",
       showSearchResults: hasAnyUrlFilter ? true : (persisted.showSearchResults ?? false),
     };
   }, []);
@@ -190,8 +215,11 @@ function Home() {
   const [maxCookTime, setMaxCookTime] = useState(initialHomeViewState.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime);
   const [totalTime, setTotalTime] = useState(initialHomeViewState.totalTime ?? (DEFAULT_TIME_RANGES.maxPrepTime + DEFAULT_TIME_RANGES.maxCookTime));
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter | null>(initialHomeViewState.selectedDifficulty ?? null);
+  const [searchSort, setSearchSort] = useState<SearchSort>(initialHomeViewState.searchSort ?? "relevance");
+  const [displayedSearchCount, setDisplayedSearchCount] = useState(SEARCH_INITIAL_VISIBLE);
   const [isSearchUiFocused, setIsSearchUiFocused] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
+  const searchLoadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const searchUiRef = useRef<HTMLDivElement>(null);
   const filterControlsRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -262,10 +290,11 @@ function Home() {
       maxCookTime,
       totalTime,
       selectedDifficulty,
+      searchSort,
       showSearchResults,
     };
     sessionStorage.setItem(HOME_VIEW_STATE_KEY, JSON.stringify(viewState));
-  }, [searchTerm, maxPrepTime, maxCookTime, totalTime, selectedDifficulty, showSearchResults]);
+  }, [searchTerm, maxPrepTime, maxCookTime, totalTime, selectedDifficulty, searchSort, showSearchResults]);
 
   useEffect(() => {
     const term = searchTerm.trim();
@@ -278,13 +307,14 @@ function Home() {
     if (prepFilterActive) nextParams.set("maxPrepTime", String(maxPrepTime));
     if (cookFilterActive) nextParams.set("maxCookTime", String(maxCookTime));
     if (difficultyFilterActive && selectedDifficulty) nextParams.set("difficulty", selectedDifficulty);
+    if (searchSort !== "relevance") nextParams.set("sort", searchSort);
 
     const currentQuery = searchParams.toString();
     const nextQuery = nextParams.toString();
     if (currentQuery !== nextQuery) {
       setSearchParams(nextParams, { replace: true });
     }
-  }, [searchTerm, maxPrepTime, maxCookTime, selectedDifficulty, timeRanges.maxPrepTime, timeRanges.maxCookTime, searchParams, setSearchParams]);
+  }, [searchTerm, maxPrepTime, maxCookTime, selectedDifficulty, searchSort, timeRanges.maxPrepTime, timeRanges.maxCookTime, searchParams, setSearchParams]);
 
   const handleResize = useCallback(() => {
     if (gridContainerRef.current) {
@@ -319,6 +349,7 @@ function Home() {
     params.set("q", term);
     params.set("maxPrepTime", String(maxPrepTime));
     params.set("maxCookTime", String(maxCookTime));
+    params.set("limit", String(SEARCH_FETCH_LIMIT));
     if (selectedDifficulty) {
       params.set("difficulty", selectedDifficulty);
     }
@@ -334,9 +365,11 @@ function Home() {
         ? fetchedRecipes.filter((recipe: RecipeFromDB) => (recipe.difficulty || "").toUpperCase() === selectedDifficulty)
         : fetchedRecipes;
       setSearchResults(strictDifficultyRecipes);
+      setDisplayedSearchCount(SEARCH_INITIAL_VISIBLE);
       setShowSearchResults(true);
     } catch {
       setSearchResults([]);
+      setDisplayedSearchCount(SEARCH_INITIAL_VISIBLE);
       setShowSearchResults(true);
     } finally {
       setIsSearching(false);
@@ -409,6 +442,7 @@ function Home() {
     setTotalTime(timeRanges.maxPrepTime + timeRanges.maxCookTime);
     setSelectedDifficulty(null);
     setSearchResults([]);
+    setDisplayedSearchCount(SEARCH_INITIAL_VISIBLE);
     setShowSearchResults(false);
     setIsSearchUiFocused(false);
     setSearchParams(new URLSearchParams(), { replace: true });
@@ -438,7 +472,36 @@ function Home() {
 
   const showExpandedSearchUi = isSearchUiFocused || showSearchResults;
 
-  const visibleSearchRecipes = getFullRowItems(searchResults, containerWidth);
+  const sortedSearchResults = useMemo(() => {
+    if (searchResults.length <= 1 || searchSort === "relevance") {
+      return searchResults;
+    }
+
+    const getTotalTime = (recipe: RecipeFromDB) => (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0);
+    const next = [...searchResults];
+
+    switch (searchSort) {
+      case "total-time-asc":
+        next.sort((a, b) => getTotalTime(a) - getTotalTime(b));
+        break;
+      case "total-time-desc":
+        next.sort((a, b) => getTotalTime(b) - getTotalTime(a));
+        break;
+      case "title-asc":
+        next.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case "title-desc":
+        next.sort((a, b) => b.title.localeCompare(a.title));
+        break;
+      default:
+        break;
+    }
+
+    return next;
+  }, [searchResults, searchSort]);
+
+  const slicedSearchResults = sortedSearchResults.slice(0, displayedSearchCount);
+  const visibleSearchRecipes = getFullRowItems(slicedSearchResults, containerWidth);
   const visibleHomeSections = useMemo(
     () => homeSections
       .map((section) => ({
@@ -473,6 +536,32 @@ function Home() {
       img.src = url;
     });
   }, [carouselRecipes]);
+
+  useEffect(() => {
+    if (!showSearchResults || isSearching) return;
+    if (displayedSearchCount >= sortedSearchResults.length) return;
+    if (!searchLoadMoreSentinelRef.current) return;
+
+    const sentinel = searchLoadMoreSentinelRef.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const isVisible = entries.some((entry) => entry.isIntersecting);
+        if (!isVisible) return;
+
+        setDisplayedSearchCount((prev) =>
+          Math.min(prev + SEARCH_LOAD_MORE_STEP, sortedSearchResults.length)
+        );
+      },
+      {
+        root: null,
+        rootMargin: "0px 0px 180px 0px",
+        threshold: 0.01,
+      }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [showSearchResults, isSearching, displayedSearchCount, sortedSearchResults.length]);
 
   return (
     <div className="home-page">
@@ -540,8 +629,12 @@ function Home() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={() => setIsSearchUiFocused(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void runSearch();
+                }
+              }}
             />
-            <button className="hero-search-btn" onClick={() => void runSearch()}>Search</button>
           </motion.div>
 
           <motion.div
@@ -739,6 +832,26 @@ function Home() {
             ? "Same style, filtered instantly as you type"
             : "Curated from the most popular recipes to keep the page fast and focused"}
         </p>
+        {showSearchResults && (
+          <div className="search-results-toolbar">
+            <span className="search-results-count">
+              Showing {Math.min(visibleSearchRecipes.length, searchResults.length)} of {searchResults.length} recipes
+            </span>
+            <label className="search-sort-control">
+              <span>Sort by</span>
+              <select
+                value={searchSort}
+                onChange={(e) => setSearchSort(e.target.value as SearchSort)}
+              >
+                <option value="relevance">Relevance</option>
+                <option value="total-time-asc">Total time: Low to high</option>
+                <option value="total-time-desc">Total time: High to low</option>
+                <option value="title-asc">Title: A to Z</option>
+                <option value="title-desc">Title: Z to A</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
       <div ref={gridContainerRef} className="recipe-grid-container">
         {loading || isSearching ? (
@@ -747,51 +860,60 @@ function Home() {
           visibleSearchRecipes.length === 0 ? (
             <p className="recipe-grid-loading">No recipes found for the current search and filters</p>
           ) : (
-            <div className="recipe-grid">
-              {visibleSearchRecipes.map(r => (
-                <motion.div
-                  key={r.recipeid}
-                  className="recipe-card"
-                  onClick={() => navigate(`/recipes/${r.recipeid}`)}
-                  whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-                  initial={{ opacity: 0, y: 30 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  <div className="recipe-card-img-wrap">
-                    <img
-                      src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
-                      alt={r.title}
-                      className="recipe-card-img"
-                      loading="lazy"
-                      decoding="async"
-                    />
-                    {r.difficulty && (
-                      <span className={`recipe-card-badge badge-${r.difficulty.toLowerCase()}`}>
-                        {r.difficulty}
-                      </span>
-                    )}
-                  </div>
-                  <div className="recipe-card-body">
-                    <h3 className="recipe-card-title">{r.title}</h3>
-                    {r.description && (
-                      <p className="recipe-card-desc">{r.description}</p>
-                    )}
-                    <div className="recipe-card-meta">
-                      {r.proptimemin != null && (
-                        <span className="recipe-card-meta-item">🥣 Prep {r.proptimemin} min</span>
-                      )}
-                      {r.cooktimemin != null && (
-                        <span className="recipe-card-meta-item">🕐 {r.cooktimemin} min</span>
-                      )}
-                      {r.servings != null && (
-                        <span className="recipe-card-meta-item">🍽️ {r.servings} servings</span>
+            <>
+              <div className="recipe-grid">
+                {visibleSearchRecipes.map(r => (
+                  <motion.div
+                    key={r.recipeid}
+                    className="recipe-card"
+                    onClick={() => navigate(`/recipes/${r.recipeid}`)}
+                    whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4 }}
+                  >
+                    <div className="recipe-card-img-wrap">
+                      <img
+                        src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
+                        alt={r.title}
+                        className="recipe-card-img"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                      {r.difficulty && (
+                        <span className={`recipe-card-badge badge-${r.difficulty.toLowerCase()}`}>
+                          {r.difficulty}
+                        </span>
                       )}
                     </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                    <div className="recipe-card-body">
+                      <h3 className="recipe-card-title">{r.title}</h3>
+                      {r.description && (
+                        <p className="recipe-card-desc">{r.description}</p>
+                      )}
+                      <div className="recipe-card-meta">
+                        {r.proptimemin != null && (
+                          <span className="recipe-card-meta-item">🥣 Prep {r.proptimemin} min</span>
+                        )}
+                        {r.cooktimemin != null && (
+                          <span className="recipe-card-meta-item">🕐 {r.cooktimemin} min</span>
+                        )}
+                        {r.servings != null && (
+                          <span className="recipe-card-meta-item">🍽️ {r.servings} servings</span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+              {visibleSearchRecipes.length < searchResults.length && (
+                <div
+                  ref={searchLoadMoreSentinelRef}
+                  className="search-load-more-sentinel"
+                  aria-hidden="true"
+                />
+              )}
+            </>
           )
         ) : visibleHomeSections.length === 0 ? (
           <p className="recipe-grid-loading">No featured categories available right now</p>
