@@ -58,7 +58,7 @@ function ScrollRestorationManager() {
         }
       };
       restore();
-    } else {
+    } else if (navigationType === "PUSH") {
       window.scrollTo(0, 0);
     }
 
