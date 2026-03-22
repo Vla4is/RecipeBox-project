@@ -19,6 +19,11 @@ interface RecipeFromDB {
   servings: number | null;
 }
 
+interface HomeRecommendation extends RecipeFromDB {
+  score?: number;
+  reason?: string;
+}
+
 interface RecipeTimeRanges {
   minPrepTime: number;
   maxPrepTime: number;
@@ -27,25 +32,6 @@ interface RecipeTimeRanges {
 }
 
 type DifficultyFilter = "EASY" | "MEDIUM" | "HARD";
-
-const recipesSet1 = [
-  { id: 1, title: "Blueberry Pancakes", image: "https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg" },
-  { id: 2, title: "Grilled Salmon", image: "https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg" },
-  { id: 3, title: "Caesar Salad", image: "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg" },
-  { id: 4, title: "Beef Burger", image: "https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg" },
-  { id: 5, title: "Chicken Curry", image: "https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg" },
-  { id: 6, title: "Margarita Pizza", image: "https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg" },
-  { id: 7, title: "Egg Fried Rice", image: "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg" },
-  { id: 8, title: "Greek Salad", image: "https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg" },
-  { id: 9, title: "Tiramisu", image: "https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg" },
-  { id: 10, title: "Pasta Carbonara", image: "https://images.pexels.com/photos/357756/pexels-photo-357756.jpeg" },
-  { id: 11, title: "French Toast", image: "https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg" },
-  { id: 12, title: "Fish Tacos", image: "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg" },
-  { id: 13, title: "Veggie Pizza", image: "https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg" },
-  { id: 14, title: "Chicken Alfredo", image: "https://images.pexels.com/photos/357756/pexels-photo-357756.jpeg" },
-  { id: 15, title: "Steak Frites", image: "https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg" },
-  { id: 16, title: "Caprese Salad", image: "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg" },
-];
 
 const CARD_MIN_WIDTH = 260;
 const GRID_GAP = 32;
@@ -68,6 +54,45 @@ function getAuthHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function getOrCreateSessionId(): string {
+  let sessionId = localStorage.getItem("recipe_session_id");
+  if (!sessionId) {
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    localStorage.setItem("recipe_session_id", sessionId);
+  }
+  return sessionId;
+}
+
+async function trackRecipeClick(recipeId: string): Promise<void> {
+  const token = localStorage.getItem("jwt_token");
+  
+  try {
+    if (token) {
+      // Track CLICK event for logged-in users
+      await fetch("/api/recipe-events", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ recipeId, eventType: "CLICK" }),
+      });
+    } else {
+      // Track CLICK event for anonymous users with session ID
+      const sessionId = getOrCreateSessionId();
+      await fetch("/api/recipe-events/anonymous", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sessionId, recipeId, eventType: "CLICK" }),
+      });
+    }
+  } catch {
+    // Non-blocking analytics call.
+  }
+}
+
 /** Calculate how many columns fit and trim to full rows only */
 function getFullRowItems(items: RecipeFromDB[], containerWidth: number): RecipeFromDB[] {
   if (containerWidth <= 0 || items.length === 0) return items;
@@ -80,6 +105,7 @@ function getFullRowItems(items: RecipeFromDB[], containerWidth: number): RecipeF
 function Home() {
   const navigate = useNavigate();
   const [dbRecipes, setDbRecipes] = useState<RecipeFromDB[]>([]);
+  const [recommendedRecipes, setRecommendedRecipes] = useState<HomeRecommendation[]>([]);
   const [searchResults, setSearchResults] = useState<RecipeFromDB[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -97,12 +123,27 @@ function Home() {
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
+    const headers = getAuthHeaders();
+    const token = localStorage.getItem("jwt_token");
+    const sessionId = getOrCreateSessionId();
+    
+    const recommendationsUrl = token 
+      ? "/api/recommendations/home?limit=24"
+      : `/api/recommendations/home?limit=24&sessionId=${encodeURIComponent(sessionId)}`;
+
     Promise.all([
       fetch("/api/recipes").then((r) => r.json()),
-      fetch("/api/recipes/time-ranges", { headers: getAuthHeaders() }).then((r) => r.json()),
+      fetch("/api/recipes/time-ranges", { headers }).then((r) => r.json()),
+      fetch(recommendationsUrl, { headers }).then((r) => r.json()),
     ])
-      .then(([recipesData, rangesData]) => {
-        setDbRecipes(recipesData.recipes || []);
+      .then(([recipesData, rangesData, recommendationsData]) => {
+        const allRecipes = Array.isArray(recipesData.recipes) ? recipesData.recipes : [];
+        const fetchedRecommendations = Array.isArray(recommendationsData.recommendations)
+          ? recommendationsData.recommendations
+          : [];
+
+        setDbRecipes(allRecipes);
+        setRecommendedRecipes(fetchedRecommendations);
 
         const nextRanges: RecipeTimeRanges = {
           minPrepTime: Number(rangesData?.minPrepTime ?? 0),
@@ -116,7 +157,10 @@ function Home() {
         setMaxCookTime(nextRanges.maxCookTime);
         setTotalTime(nextRanges.maxPrepTime + nextRanges.maxCookTime);
       })
-      .catch(() => undefined)
+      .catch(() => {
+        setDbRecipes([]);
+        setRecommendedRecipes([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -255,6 +299,7 @@ function Home() {
 
   const activeRecipes = showSearchResults ? searchResults : dbRecipes;
   const visibleRecipes = getFullRowItems(activeRecipes, containerWidth);
+  const carouselRecipes = recommendedRecipes.length > 0 ? recommendedRecipes : dbRecipes;
 
   return (
     <div className="home-page">
@@ -470,17 +515,21 @@ function Home() {
       {/* ===== RECIPE SECTIONS ===== */}
       <div className={`carousel-section ${showSearchResults ? "carousel-section-hidden" : ""}`}>
         <Carousel>
-          {recipesSet1.map(r => (
+          {carouselRecipes.map((r) => (
             <motion.div
-              key={r.id}
+              key={r.recipeid}
               whileHover={{ scale: 1.05, boxShadow: "0 8px 32px #fff2" }}
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              style={{ minWidth: 260, maxWidth: 260, height: 320, position: "relative", borderRadius: 16, overflow: "hidden", margin: "0 0", background: "#222", display: "flex", alignItems: "flex-end", justifyContent: "center", touchAction: "none" }}
+              style={{ minWidth: 260, maxWidth: 260, height: 320, position: "relative", borderRadius: 16, overflow: "hidden", margin: "0 0", background: "#222", display: "flex", alignItems: "flex-end", justifyContent: "center", touchAction: "none", cursor: "pointer" }}
+              onClick={() => {
+                void trackRecipeClick(r.recipeid);
+                navigate(`/recipes/${r.recipeid}`);
+              }}
             >
               <img
-                src={r.image}
+                src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
                 alt={r.title}
                 style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
                 draggable={false}

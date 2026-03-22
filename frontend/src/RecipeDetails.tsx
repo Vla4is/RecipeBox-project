@@ -37,6 +37,15 @@ type RecipeDetailsResponse = {
   tags: string[];
 };
 
+function getOrCreateSessionId(): string {
+  let sessionId = localStorage.getItem("recipe_session_id");
+  if (!sessionId) {
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    localStorage.setItem("recipe_session_id", sessionId);
+  }
+  return sessionId;
+}
+
 function formatTimer(sec: number): string {
   if (sec < 60) return `${sec}s`;
   const m = Math.floor(sec / 60);
@@ -88,6 +97,37 @@ export default function RecipeDetails() {
         const body = await res.json();
         if (!res.ok) throw new Error(body.error || "Failed to load recipe");
         setData(body);
+        
+        const token = localStorage.getItem("jwt_token");
+        if (token) {
+          // Track VIEW event for logged-in users
+          try {
+            await fetch("/api/recipe-events", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ recipeId, eventType: "VIEW" }),
+            });
+          } catch {
+            // Non-blocking analytics
+          }
+        } else {
+          // Track VIEW event for anonymous users with session ID
+          const sessionId = getOrCreateSessionId();
+          try {
+            await fetch("/api/recipe-events/anonymous", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ sessionId, recipeId, eventType: "VIEW" }),
+            });
+          } catch {
+            // Non-blocking analytics
+          }
+        }
       })
       .catch((err: Error) => setError(err.message || "Failed to load recipe"))
       .finally(() => setLoading(false));

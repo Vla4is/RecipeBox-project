@@ -2,6 +2,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import initializeDatabase from "./db-init";
+import pool from "./database";
 import { createUser, authenticateUser } from "./services/userService";
 import {
   getPublicRecipes,
@@ -14,6 +15,13 @@ import {
   searchRecipes,
   getRecipeTimeRanges,
 } from "./services/recipeService";
+import {
+  getHomeRecommendations,
+  recordRecipeEvent,
+  recordAnonymousRecipeEvent,
+  RecipeEventType,
+} from "./services/recommendationService";
+import seedRecipes from "./seedRecipes";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 
@@ -79,6 +87,23 @@ app.get("/", (_req: Request, res: Response) => {
 
 app.get("/api/hello", (_req: Request, res: Response) => {
   res.json({ message: "Bro Hello from the backend!" });
+});
+
+app.post("/api/admin/reseed-recipes", async (_req: Request, res: Response) => {
+  try {
+    await pool.query("DELETE FROM user_recipe_events");
+    await pool.query("DELETE FROM steps");
+    await pool.query("DELETE FROM favorites");
+    await pool.query("DELETE FROM reviews");
+    await pool.query("DELETE FROM recipe_ingredients");
+    await pool.query("DELETE FROM recipes");
+    await pool.query("DELETE FROM ingredients");
+    await seedRecipes(pool);
+    return res.json({ success: true, message: "Recipes reseeded successfully" });
+  } catch (err) {
+    console.error("Reseed error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 app.get("/api/recipes", async (_req: Request, res: Response) => {
@@ -150,6 +175,87 @@ app.get("/api/recipes/:recipeId", async (req: Request, res: Response) => {
     return res.json(details);
   } catch (err) {
     console.error("Error fetching recipe details:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/recipe-events", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { recipeId, eventType, countryCode } = req.body || {};
+    const normalizedEventType = typeof eventType === "string" ? eventType.toUpperCase() : "";
+    const allowedEventTypes: RecipeEventType[] = ["VIEW", "CLICK", "SAVE"];
+
+    if (!recipeId || typeof recipeId !== "string") {
+      return res.status(400).json({ error: "recipeId is required" });
+    }
+
+    if (!allowedEventTypes.includes(normalizedEventType as RecipeEventType)) {
+      return res.status(400).json({ error: "eventType must be VIEW, CLICK, or SAVE" });
+    }
+
+    await recordRecipeEvent({
+      userid: req.user!.userid,
+      recipeid: recipeId,
+      eventType: normalizedEventType as RecipeEventType,
+      countryCode: typeof countryCode === "string" ? countryCode : undefined,
+    });
+
+    return res.status(201).json({ success: true });
+  } catch (err) {
+    console.error("Error recording recipe event:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/recipe-events/anonymous", async (req: Request, res: Response) => {
+  try {
+    const { sessionId, recipeId, eventType, countryCode } = req.body || {};
+    const normalizedEventType = typeof eventType === "string" ? eventType.toUpperCase() : "";
+    const allowedEventTypes: RecipeEventType[] = ["VIEW", "CLICK", "SAVE"];
+
+    if (!sessionId || typeof sessionId !== "string") {
+      return res.status(400).json({ error: "sessionId is required" });
+    }
+
+    if (!recipeId || typeof recipeId !== "string") {
+      return res.status(400).json({ error: "recipeId is required" });
+    }
+
+    if (!allowedEventTypes.includes(normalizedEventType as RecipeEventType)) {
+      return res.status(400).json({ error: "eventType must be VIEW, CLICK, or SAVE" });
+    }
+
+    await recordAnonymousRecipeEvent({
+      sessionId,
+      recipeid: recipeId,
+      eventType: normalizedEventType as RecipeEventType,
+      countryCode: typeof countryCode === "string" ? countryCode : undefined,
+    });
+
+    return res.status(201).json({ success: true });
+  } catch (err) {
+    console.error("Error recording anonymous recipe event:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/recommendations/home", async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    const rawLimit = req.query.limit;
+    const rawSessionId = req.query.sessionId;
+    const parsedLimit = Number(Array.isArray(rawLimit) ? rawLimit[0] : rawLimit);
+    const sessionId = typeof rawSessionId === "string" ? rawSessionId : undefined;
+    
+    const recommendations = await getHomeRecommendations(
+      user?.userid,
+      sessionId,
+      Number.isFinite(parsedLimit) ? parsedLimit : 20
+    );
+
+    return res.json({ recommendations });
+  } catch (err) {
+    console.error("Error fetching home recommendations:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

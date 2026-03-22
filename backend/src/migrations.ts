@@ -1,4 +1,5 @@
 import pool from "./database";
+import seedRecipes from "./seedRecipes";
 
 async function createTables() {
   try {
@@ -47,6 +48,15 @@ async function createTables() {
         );
       `);
       console.log('Created unit_enum type');
+    }
+
+    if (await typeExists('recipe_event_type_enum')) {
+      console.log('recipe_event_type_enum type already exists');
+    } else {
+      await pool.query(`
+        CREATE TYPE recipe_event_type_enum AS ENUM ('VIEW', 'CLICK', 'SAVE');
+      `);
+      console.log('Created recipe_event_type_enum type');
     }
 
     // ensure users table
@@ -206,6 +216,48 @@ async function createTables() {
       console.log('Reviews table created successfully');
     }
 
+    // ensure user_recipe_events table
+    if (await tableExists('user_recipe_events')) {
+      console.log('User recipe events table already exists, skipping creation');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_recipe_events_user_created ON user_recipe_events(userid, created_at DESC)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_recipe_events_recipe ON user_recipe_events(recipeid)`);
+    } else {
+      await pool.query(`
+        CREATE TABLE user_recipe_events (
+          eventid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+          recipeid UUID NOT NULL REFERENCES recipes(recipeid) ON DELETE CASCADE,
+          event_type recipe_event_type_enum NOT NULL,
+          country_code VARCHAR(2),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await pool.query(`CREATE INDEX idx_user_recipe_events_user_created ON user_recipe_events(userid, created_at DESC)`);
+      await pool.query(`CREATE INDEX idx_user_recipe_events_recipe ON user_recipe_events(recipeid)`);
+      console.log('User recipe events table created successfully');
+    }
+
+    // ensure anonymous_recipe_events table
+    if (await tableExists('anonymous_recipe_events')) {
+      console.log('Anonymous recipe events table already exists, skipping creation');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_anon_recipe_events_session_created ON anonymous_recipe_events(session_id, created_at DESC)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_anon_recipe_events_recipe ON anonymous_recipe_events(recipeid)`);
+    } else {
+      await pool.query(`
+        CREATE TABLE anonymous_recipe_events (
+          eventid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          session_id VARCHAR(255) NOT NULL,
+          recipeid UUID NOT NULL REFERENCES recipes(recipeid) ON DELETE CASCADE,
+          event_type recipe_event_type_enum NOT NULL,
+          country_code VARCHAR(2),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await pool.query(`CREATE INDEX idx_anon_recipe_events_session_created ON anonymous_recipe_events(session_id, created_at DESC)`);
+      await pool.query(`CREATE INDEX idx_anon_recipe_events_recipe ON anonymous_recipe_events(recipeid)`);
+      console.log('Anonymous recipe events table created successfully');
+    }
+
     // ensure shopping_list table
     if (await tableExists('shopping_list')) {
       console.log('Shopping list table already exists, skipping creation');
@@ -238,41 +290,7 @@ async function createTables() {
       console.log('Shopping item table created successfully');
     }
 
-    // Seed recipes if empty
-    const recipeCount = await pool.query('SELECT COUNT(*) FROM recipes');
-    if (parseInt(recipeCount.rows[0].count) === 0) {
-      const seedRecipes = [
-        { title: 'Chocolate Cake', description: 'Rich and decadent chocolate layer cake', image_url: 'https://images.pexels.com/photos/227432/pexels-photo-227432.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 30, cookTime: 45, servings: 8 },
-        { title: 'Shrimp Pasta', description: 'Creamy garlic shrimp with linguine', image_url: 'https://images.pexels.com/photos/357756/pexels-photo-357756.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 15, cookTime: 20, servings: 4 },
-        { title: 'Avocado Toast', description: 'Smashed avocado on sourdough with toppings', image_url: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 5, cookTime: 5, servings: 2 },
-        { title: 'Tomato Soup', description: 'Classic creamy tomato soup with basil', image_url: 'https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 10, cookTime: 30, servings: 4 },
-        { title: 'Falafel Wrap', description: 'Crispy falafel with tahini and fresh veggies', image_url: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 20, cookTime: 15, servings: 4 },
-        { title: 'Sushi Rolls', description: 'Fresh salmon and avocado maki rolls', image_url: 'https://images.pexels.com/photos/357756/pexels-photo-357756.jpeg', difficulty: 'HARD', visibility: 'PUBLIC', prepTime: 40, cookTime: 20, servings: 4 },
-        { title: 'Chicken Quesadilla', description: 'Cheesy grilled chicken quesadilla', image_url: 'https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 10, cookTime: 10, servings: 2 },
-        { title: 'Apple Pie', description: 'Classic American apple pie with flaky crust', image_url: 'https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 30, cookTime: 50, servings: 8 },
-        { title: 'Banana Bread', description: 'Moist banana bread with walnuts', image_url: 'https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 15, cookTime: 60, servings: 8 },
-        { title: 'Veggie Stir Fry', description: 'Colorful vegetables in a savory sauce', image_url: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 15, cookTime: 10, servings: 3 },
-        { title: 'Lemon Tart', description: 'Tangy lemon curd in a buttery shell', image_url: 'https://images.pexels.com/photos/227432/pexels-photo-227432.jpeg', difficulty: 'HARD', visibility: 'PUBLIC', prepTime: 30, cookTime: 35, servings: 6 },
-        { title: 'Pulled Pork', description: 'Slow-cooked BBQ pulled pork', image_url: 'https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 20, cookTime: 360, servings: 10 },
-        { title: 'Eggplant Parmesan', description: 'Crispy breaded eggplant with marinara', image_url: 'https://images.pexels.com/photos/357756/pexels-photo-357756.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 25, cookTime: 40, servings: 6 },
-        { title: 'Chicken Shawarma', description: 'Spiced grilled chicken with garlic sauce', image_url: 'https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 20, cookTime: 25, servings: 4 },
-        { title: 'Berry Parfait', description: 'Layered yogurt with fresh berries and granola', image_url: 'https://images.pexels.com/photos/376464/pexels-photo-376464.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 10, cookTime: 0, servings: 2 },
-        { title: 'Spinach Quiche', description: 'Savory spinach and cheese quiche', image_url: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 20, cookTime: 40, servings: 6 },
-        { title: 'Pad Thai', description: 'Classic Thai stir-fried rice noodles', image_url: 'https://images.pexels.com/photos/357756/pexels-photo-357756.jpeg', difficulty: 'MEDIUM', visibility: 'PUBLIC', prepTime: 20, cookTime: 15, servings: 4 },
-        { title: 'Beef Tacos', description: 'Seasoned ground beef tacos with salsa', image_url: 'https://images.pexels.com/photos/1437267/pexels-photo-1437267.jpeg', difficulty: 'EASY', visibility: 'PUBLIC', prepTime: 10, cookTime: 15, servings: 4 },
-        { title: 'Mushroom Risotto', description: 'Creamy arborio rice with wild mushrooms', image_url: 'https://images.pexels.com/photos/461382/pexels-photo-461382.jpeg', difficulty: 'HARD', visibility: 'PUBLIC', prepTime: 15, cookTime: 35, servings: 4 },
-        { title: 'Crème Brûlée', description: 'Vanilla custard with caramelized sugar top', image_url: 'https://images.pexels.com/photos/227432/pexels-photo-227432.jpeg', difficulty: 'HARD', visibility: 'PUBLIC', prepTime: 20, cookTime: 45, servings: 4 },
-        { title: 'Greek Moussaka', description: 'Layered eggplant, meat, and béchamel', image_url: 'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg', difficulty: 'HARD', visibility: 'PUBLIC', prepTime: 30, cookTime: 60, servings: 8 },
-      ];
-
-      for (const r of seedRecipes) {
-        await pool.query(
-          `INSERT INTO recipes (title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility) VALUES ($1, $2, $3, $4, $5, $6, $7::difficulty_enum, $8::visibility_enum)`,
-          [r.title, r.description, r.image_url, r.prepTime, r.cookTime, r.servings, r.difficulty, r.visibility]
-        );
-      }
-      console.log(`Seeded ${seedRecipes.length} recipes`);
-    }
+    await seedRecipes(pool);
   } catch (error) {
     console.error('Error creating tables:', error);
     throw error;
