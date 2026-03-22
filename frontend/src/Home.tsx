@@ -183,7 +183,12 @@ function Home() {
     const prepParam = parseOptionalNumber(urlParams.get("maxPrepTime"));
     const cookParam = parseOptionalNumber(urlParams.get("maxCookTime"));
     const difficultyParam = parseDifficultyFilter(urlParams.get("difficulty"));
-    const sortParam = parseSearchSort(urlParams.get("sort"));
+    const sortParamRaw = urlParams.get("sort");
+    const sortParam = parseSearchSort(sortParamRaw);
+    const hasPersistedPrep = typeof persisted.maxPrepTime === "number";
+    const hasPersistedCook = typeof persisted.maxCookTime === "number";
+    const resolvedPrep = prepParam ?? (hasPersistedPrep ? persisted.maxPrepTime : undefined);
+    const resolvedCook = cookParam ?? (hasPersistedCook ? persisted.maxCookTime : undefined);
     const hasAnyUrlFilter =
       qParam !== null ||
       prepParam !== undefined ||
@@ -193,11 +198,14 @@ function Home() {
 
     return {
       searchTerm: qParam ?? persisted.searchTerm ?? "",
-      maxPrepTime: prepParam ?? persisted.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime,
-      maxCookTime: cookParam ?? persisted.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime,
-      totalTime: (prepParam ?? persisted.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime) + (cookParam ?? persisted.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime),
+      maxPrepTime: resolvedPrep,
+      maxCookTime: resolvedCook,
+      totalTime:
+        typeof resolvedPrep === "number" && typeof resolvedCook === "number"
+          ? resolvedPrep + resolvedCook
+          : persisted.totalTime,
       selectedDifficulty: difficultyParam ?? persisted.selectedDifficulty ?? null,
-      searchSort: sortParam || persisted.searchSort || "relevance",
+      searchSort: sortParamRaw !== null ? sortParam : (persisted.searchSort ?? "relevance"),
       showSearchResults: hasAnyUrlFilter ? true : (persisted.showSearchResults ?? false),
     };
   }, []);
