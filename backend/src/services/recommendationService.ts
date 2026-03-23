@@ -37,6 +37,10 @@ interface DifficultyPreferenceRow {
   weight: number;
 }
 
+interface AnonymousClickCountRow {
+  click_count: number;
+}
+
 export async function recordRecipeEvent(input: RecordRecipeEventInput): Promise<void> {
   await pool.query(
     `INSERT INTO user_recipe_events (userid, recipeid, event_type, country_code)
@@ -64,10 +68,11 @@ export async function getHomeRecommendations(userid?: string, sessionId?: string
 
   if (sessionId && !userid) {
     // Anonymous user with session history
-    const [seenRecipeIds, tagPrefs, difficultyPrefs] = await Promise.all([
+    const [seenRecipeIds, tagPrefs, difficultyPrefs, anonymousRecentClickCount] = await Promise.all([
       fetchAnonymousSeenRecipes(sessionId),
       fetchAnonymousTagPreferences(sessionId),
       fetchAnonymousDifficultyPreferences(sessionId),
+      fetchAnonymousRecentClickCount(sessionId),
     ]);
 
     return rankForUser({
@@ -77,6 +82,8 @@ export async function getHomeRecommendations(userid?: string, sessionId?: string
       tagPrefs,
       difficultyPrefs,
       recipeTags,
+      isAnonymous: true,
+      anonymousRecentClickCount,
     });
   }
 
@@ -94,6 +101,8 @@ export async function getHomeRecommendations(userid?: string, sessionId?: string
       tagPrefs,
       difficultyPrefs,
       recipeTags,
+      isAnonymous: false,
+      anonymousRecentClickCount: 0,
     });
   }
 
@@ -187,12 +196,12 @@ async function fetchAnonymousTagPreferences(sessionId: string): Promise<Map<stri
               (
                 CASE e.event_type
                   WHEN 'VIEW' THEN 1
-                  WHEN 'CLICK' THEN 2
-                  WHEN 'SAVE' THEN 4
+                  WHEN 'CLICK' THEN 8
+                  WHEN 'SAVE' THEN 0
                   ELSE 0
                 END
               )
-              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 18)
+              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 6)
             )::float AS weight
      FROM anonymous_recipe_events e
      JOIN tags t ON t.recipeid = e.recipeid
@@ -249,12 +258,12 @@ async function fetchAnonymousDifficultyPreferences(sessionId: string): Promise<M
               (
                 CASE e.event_type
                   WHEN 'VIEW' THEN 1
-                  WHEN 'CLICK' THEN 2
-                  WHEN 'SAVE' THEN 4
+                  WHEN 'CLICK' THEN 8
+                  WHEN 'SAVE' THEN 0
                   ELSE 0
                 END
               )
-              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 28)
+              * EXP(-GREATEST(EXTRACT(EPOCH FROM (NOW() - e.created_at)) / 86400, 0) / 8)
             )::float AS weight
      FROM anonymous_recipe_events e
      JOIN recipes r ON r.recipeid = e.recipeid
@@ -271,6 +280,20 @@ async function fetchAnonymousDifficultyPreferences(sessionId: string): Promise<M
     map.set(row.difficulty, Number(row.weight));
   }
   return map;
+}
+
+async function fetchAnonymousRecentClickCount(sessionId: string): Promise<number> {
+  const res = await pool.query(
+    `SELECT COUNT(*)::int AS click_count
+     FROM anonymous_recipe_events
+     WHERE session_id = $1
+       AND event_type = 'CLICK'
+       AND created_at >= NOW() - INTERVAL '14 days'`,
+    [sessionId]
+  );
+
+  const row = res.rows[0] as AnonymousClickCountRow | undefined;
+  return Number(row?.click_count || 0);
 }
 
 async function fetchCandidateTags(recipeIds: string[]): Promise<Map<string, string[]>> {
@@ -322,8 +345,19 @@ function rankForUser(params: {
   tagPrefs: Map<string, number>;
   difficultyPrefs: Map<string, number>;
   recipeTags: Map<string, string[]>;
+  isAnonymous: boolean;
+  anonymousRecentClickCount: number;
 }): RecommendationRow[] {
-  const { candidates, safeLimit, seenRecipeIds, tagPrefs, difficultyPrefs, recipeTags } = params;
+  const {
+    candidates,
+    safeLimit,
+    seenRecipeIds,
+    tagPrefs,
+    difficultyPrefs,
+    recipeTags,
+    isAnonymous,
+    anonymousRecentClickCount,
+  } = params;
 
   const maxPopularity = getMaxPopularity(candidates);
   const maxTagWeight = sumMapValues(tagPrefs);
@@ -339,9 +373,19 @@ function rankForUser(params: {
       const freshnessScore = calculateFreshnessScore(candidate.created_at);
 
       const hasPersonalSignals = maxTagWeight > 0 || maxDifficultyWeight > 0;
-      const score = hasPersonalSignals
-        ? 0.6 * tagScore + 0.1 * difficultyScore + 0.2 * popularityScore + 0.1 * freshnessScore
-        : 0.6 * popularityScore + 0.4 * freshnessScore;
+      const popularityFirstScore = 0.75 * popularityScore + 0.25 * freshnessScore;
+      const personalScore = 0.72 * tagScore + 0.08 * difficultyScore + 0.15 * popularityScore + 0.05 * freshnessScore;
+
+      let score: number;
+      if (!hasPersonalSignals) {
+        score = popularityFirstScore;
+      } else if (!isAnonymous) {
+        score = 0.6 * tagScore + 0.1 * difficultyScore + 0.2 * popularityScore + 0.1 * freshnessScore;
+      } else {
+        // Anonymous users start popularity-first, then quickly adapt after a few clicks.
+        const adaptFactor = clamp01(Math.log1p(anonymousRecentClickCount) / Math.log(9));
+        score = (1 - adaptFactor) * popularityFirstScore + adaptFactor * personalScore;
+      }
 
       return {
         ...toRecipeRow(candidate),
