@@ -3,6 +3,12 @@ import { RecipeRow } from "./recipeService";
 
 export type RecipeEventType = "VIEW" | "CLICK" | "SAVE";
 
+// Regularization constants to prevent overfitting
+// Caps the max weight that any single preference signal (tags or difficulty) can accumulate
+// Prevents power users from getting locked into overly narrow recommendations
+const MAX_TAG_WEIGHT_REGULARIZATION = 50;      // Cap on max total tag weight
+const MAX_DIFFICULTY_WEIGHT_REGULARIZATION = 25; // Cap on max total difficulty weight
+
 export interface RecordRecipeEventInput {
   userid: string;
   recipeid: string;
@@ -360,8 +366,11 @@ function rankForUser(params: {
   } = params;
 
   const maxPopularity = getMaxPopularity(candidates);
-  const maxTagWeight = sumMapValues(tagPrefs);
-  const maxDifficultyWeight = sumMapValues(difficultyPrefs);
+  // Apply regularization caps to prevent overfitting to power users' extreme preferences
+  const rawMaxTagWeight = sumMapValues(tagPrefs);
+  const rawMaxDifficultyWeight = sumMapValues(difficultyPrefs);
+  const maxTagWeight = Math.min(rawMaxTagWeight, MAX_TAG_WEIGHT_REGULARIZATION);
+  const maxDifficultyWeight = Math.min(rawMaxDifficultyWeight, MAX_DIFFICULTY_WEIGHT_REGULARIZATION);
 
   const personalized = candidates
     .filter((candidate) => !seenRecipeIds.has(candidate.recipeid))
