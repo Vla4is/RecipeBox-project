@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import "./App.css";
 
 type Recipe = {
@@ -36,6 +36,16 @@ type RecipeDetailsResponse = {
   steps: Step[];
   tags: string[];
 };
+
+type RecipeRatingSummary = {
+  averageRating: number;
+  totalRatings: number;
+  userRating: number | null;
+};
+
+async function safeJson<T>(res: Response): Promise<T> {
+  return res.json().catch(() => ({} as T));
+}
 
 function getOrCreateSessionId(): string {
   let sessionId = localStorage.getItem("recipe_session_id");
@@ -83,6 +93,13 @@ export default function RecipeDetails() {
   const [error, setError] = useState("");
   const [isSaved, setIsSaved] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [rating, setRating] = useState<RecipeRatingSummary>({
+    averageRating: 0,
+    totalRatings: 0,
+    userRating: null,
+  });
+  const [ratingLoading, setRatingLoading] = useState(false);
+  const [hoverRating, setHoverRating] = useState<number | null>(null);
 
   const handleBackToPrevious = () => {
     if (window.history.length > 1) {
@@ -90,6 +107,12 @@ export default function RecipeDetails() {
       return;
     }
     navigate("/", { replace: true });
+  };
+
+  const handleTagClick = (tag: string) => {
+    const value = tag.trim();
+    if (!value) return;
+    navigate(`/?q=${encodeURIComponent(value)}`);
   };
 
   useEffect(() => {
@@ -105,7 +128,7 @@ export default function RecipeDetails() {
 
     fetch(`/api/recipes/${recipeId}`, { headers })
       .then(async (res) => {
-        const body = await res.json();
+        const body = await safeJson<RecipeDetailsResponse & { error?: string }>(res);
         if (!res.ok) throw new Error(body.error || "Failed to load recipe");
         setData(body);
         
@@ -157,11 +180,34 @@ export default function RecipeDetails() {
     })
       .then(async (res) => {
         if (!res.ok) return;
-        const body = await res.json();
+        const body = await safeJson<{ saved?: boolean }>(res);
         setIsSaved(Boolean(body.saved));
       })
       .catch(() => {
         // Non-blocking for status indicator.
+      });
+  }, [recipeId]);
+
+  useEffect(() => {
+    if (!recipeId) return;
+
+    const token = localStorage.getItem("jwt_token");
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+    fetch(`/api/recipes/${recipeId}/rating-summary`, { headers })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const body = await safeJson<{ rating?: RecipeRatingSummary }>(res);
+        if (!body?.rating) return;
+
+        setRating({
+          averageRating: Number(body.rating.averageRating || 0),
+          totalRatings: Number(body.rating.totalRatings || 0),
+          userRating: body.rating.userRating == null ? null : Number(body.rating.userRating),
+        });
+      })
+      .catch(() => {
+        // Non-blocking for rating display.
       });
   }, [recipeId]);
 
@@ -180,7 +226,7 @@ export default function RecipeDetails() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
-        const body = await res.json();
+        const body = await safeJson<{ error?: string }>(res);
         throw new Error(body.error || "Failed to update saved recipe");
       }
       setIsSaved((prev) => !prev);
@@ -188,6 +234,49 @@ export default function RecipeDetails() {
       // Keep UI stable on transient errors.
     } finally {
       setSaveLoading(false);
+    }
+  };
+
+  const handleRateRecipe = async (stars: number) => {
+    if (!recipeId) return;
+
+    const token = localStorage.getItem("jwt_token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    setRatingLoading(true);
+    try {
+      const res = await fetch(`/api/recipes/${recipeId}/rating`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ stars }),
+      });
+
+      const body = await safeJson<{ error?: string; rating?: RecipeRatingSummary }>(res);
+      if (!res.ok) {
+        if (res.status === 401) {
+          navigate("/login");
+          return;
+        }
+        throw new Error(body.error || "Failed to submit rating");
+      }
+
+      if (body?.rating) {
+        setRating({
+          averageRating: Number(body.rating.averageRating || 0),
+          totalRatings: Number(body.rating.totalRatings || 0),
+          userRating: body.rating.userRating == null ? null : Number(body.rating.userRating),
+        });
+      }
+    } catch {
+      // Keep UI stable on transient errors.
+    } finally {
+      setRatingLoading(false);
     }
   };
 
@@ -330,10 +419,59 @@ export default function RecipeDetails() {
               transition={{ duration: 0.35, delay: 0.48 }}
             >
               {tags.map((t) => (
-                <span key={t} className="rd-tag">{t}</span>
+                <button
+                  key={t}
+                  type="button"
+                  className="rd-tag rd-tag-btn"
+                  onClick={() => handleTagClick(t)}
+                  aria-label={`Search recipes by tag ${t}`}
+                >
+                  {t}
+                </button>
               ))}
             </motion.div>
           )}
+
+          <motion.div
+            className="rd-rating"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.35, delay: 0.54 }}
+          >
+            <div className="rd-rating-summary">
+              <span className="rd-rating-title">Rate this recipe</span>
+              <span className="rd-rating-meta">
+                {rating.totalRatings > 0
+                  ? `${rating.averageRating.toFixed(1)} / 5 (${rating.totalRatings} rating${rating.totalRatings === 1 ? "" : "s"})`
+                  : "No ratings yet"}
+              </span>
+            </div>
+
+            <div
+              className="rd-rating-stars"
+              role="group"
+              aria-label="Rate this recipe"
+              onMouseLeave={() => setHoverRating(null)}
+            >
+              {[1, 2, 3, 4, 5].map((star) => {
+                const selectedValue = hoverRating ?? rating.userRating ?? 0;
+                const active = star <= selectedValue;
+                return (
+                  <button
+                    key={star}
+                    type="button"
+                    className={`rd-rating-star ${active ? "rd-rating-star-active" : ""}`}
+                    onMouseEnter={() => setHoverRating(star)}
+                    onClick={() => handleRateRecipe(star)}
+                    disabled={ratingLoading}
+                    aria-label={`Rate ${star} star${star === 1 ? "" : "s"}`}
+                  >
+                    ★
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
         </div>
       </motion.section>
 

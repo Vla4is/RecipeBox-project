@@ -31,6 +31,7 @@ export interface RecommendationRow extends RecipeRow {
 
 interface CandidateRow extends RecipeRow {
   popularity_score: number;
+  rating_score: number;
 }
 
 interface TagPreferenceRow {
@@ -118,7 +119,8 @@ export async function getHomeRecommendations(userid?: string, sessionId?: string
 async function fetchCandidates(): Promise<CandidateRow[]> {
   const res = await pool.query(
     `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.proptimemin, r.cooktimemin, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at,
-            COALESCE(popularity.popularity_score, 0) AS popularity_score
+            COALESCE(popularity.popularity_score, 0) AS popularity_score,
+            COALESCE(rating.rating_score, 0) AS rating_score
      FROM recipes r
      LEFT JOIN (
        SELECT recipeid,
@@ -133,6 +135,12 @@ async function fetchCandidates(): Promise<CandidateRow[]> {
        FROM user_recipe_events
        GROUP BY recipeid
      ) AS popularity ON popularity.recipeid = r.recipeid
+     LEFT JOIN (
+       SELECT recipeid,
+              ((AVG(stars)::float - 1) / 4) * (COUNT(*)::float / (COUNT(*)::float + 4)) AS rating_score
+       FROM reviews
+       GROUP BY recipeid
+     ) AS rating ON rating.recipeid = r.recipeid
      WHERE r.visibility = 'PUBLIC'
      LIMIT 300`
   );
@@ -330,13 +338,14 @@ function rankForAnonymous(candidates: CandidateRow[], limit: number, recipeTags:
   return shuffled
     .map((candidate) => {
       const popularityScore = normalizedPopularity(candidate.popularity_score, maxPopularity);
+      const ratingScore = clamp01(Number(candidate.rating_score) || 0);
       const freshnessScore = calculateFreshnessScore(candidate.created_at);
-      const score = 0.6 * popularityScore + 0.4 * freshnessScore;
+      const score = 0.55 * popularityScore + 0.25 * freshnessScore + 0.2 * ratingScore;
 
       return {
         ...toRecipeRow(candidate),
         score,
-        reason: popularityScore > 0.1 ? "Trending recipe" : "Popular pick",
+        reason: ratingScore > 0.75 ? "Highly rated by users" : (popularityScore > 0.1 ? "Trending recipe" : "Popular pick"),
         tags: recipeTags.get(candidate.recipeid) || [],
       };
     })
@@ -379,17 +388,19 @@ function rankForUser(params: {
       const tagScore = computeTagScore(tags, tagPrefs, maxTagWeight);
       const difficultyScore = computeDifficultyScore(candidate.difficulty, difficultyPrefs, maxDifficultyWeight);
       const popularityScore = normalizedPopularity(candidate.popularity_score, maxPopularity);
+      const ratingScore = clamp01(Number(candidate.rating_score) || 0);
       const freshnessScore = calculateFreshnessScore(candidate.created_at);
 
       const hasPersonalSignals = maxTagWeight > 0 || maxDifficultyWeight > 0;
-      const popularityFirstScore = 0.75 * popularityScore + 0.25 * freshnessScore;
-      const personalScore = 0.72 * tagScore + 0.08 * difficultyScore + 0.15 * popularityScore + 0.05 * freshnessScore;
+      const popularityFirstScore = 0.58 * popularityScore + 0.22 * freshnessScore + 0.2 * ratingScore;
+      const personalScore = 0.68 * tagScore + 0.07 * difficultyScore + 0.1 * popularityScore + 0.05 * freshnessScore + 0.1 * ratingScore;
 
       let score: number;
       if (!hasPersonalSignals) {
         score = popularityFirstScore;
       } else if (!isAnonymous) {
-        score = 0.6 * tagScore + 0.1 * difficultyScore + 0.2 * popularityScore + 0.1 * freshnessScore;
+        // Ratings are intentionally strong for logged-in users.
+        score = 0.42 * tagScore + 0.08 * difficultyScore + 0.15 * popularityScore + 0.1 * freshnessScore + 0.25 * ratingScore;
       } else {
         // Anonymous users start popularity-first, then quickly adapt after a few clicks.
         const adaptFactor = clamp01(Math.log1p(anonymousRecentClickCount) / Math.log(9));
@@ -399,7 +410,7 @@ function rankForUser(params: {
       return {
         ...toRecipeRow(candidate),
         score,
-        reason: chooseReason(tagScore, difficultyScore, popularityScore, freshnessScore),
+        reason: chooseReason(tagScore, difficultyScore, popularityScore, freshnessScore, ratingScore),
         tags: recipeTags.get(candidate.recipeid) || [],
       };
     })
@@ -418,12 +429,13 @@ function rankForUser(params: {
   return [...personalized, ...fallback];
 }
 
-function chooseReason(tagScore: number, difficultyScore: number, popularityScore: number, freshnessScore: number): string {
+function chooseReason(tagScore: number, difficultyScore: number, popularityScore: number, freshnessScore: number, ratingScore: number): string {
   const components = [
     { key: "tag", value: tagScore, reason: "Matches your recent interests" },
     { key: "difficulty", value: difficultyScore, reason: "Matches your preferred difficulty" },
     { key: "popularity", value: popularityScore, reason: "Trending with users" },
     { key: "freshness", value: freshnessScore, reason: "Recently published" },
+    { key: "rating", value: ratingScore, reason: "Highly rated by users" },
   ];
 
   components.sort((a, b) => b.value - a.value);

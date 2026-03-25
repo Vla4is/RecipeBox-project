@@ -19,6 +19,8 @@ import {
   searchRecipes,
   getRecipeTimeRanges,
   getHomeTagSections,
+  getRecipeRatingSummary,
+  setRecipeRating,
 } from "./services/recipeService";
 import {
   getHomeRecommendations,
@@ -203,6 +205,64 @@ app.get("/api/recipes/:recipeId", async (req: Request, res: Response) => {
     return res.json(details);
   } catch (err) {
     console.error("Error fetching recipe details:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/recipes/:recipeId/rating-summary", async (req: Request, res: Response) => {
+  try {
+    const user = getOptionalUser(req);
+    const rawRecipeId = req.params.recipeId;
+    const recipeId = Array.isArray(rawRecipeId) ? rawRecipeId[0] : rawRecipeId;
+
+    if (!recipeId) {
+      return res.status(400).json({ error: "recipeId is required" });
+    }
+
+    const details = await getRecipeDetails(recipeId, user?.userid);
+    if (!details) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    const rating = await getRecipeRatingSummary(recipeId, user?.userid);
+    return res.json({ rating });
+  } catch (err) {
+    console.error("Error fetching recipe rating summary:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/api/recipes/:recipeId/rating", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const rawRecipeId = req.params.recipeId;
+    const recipeId = Array.isArray(rawRecipeId) ? rawRecipeId[0] : rawRecipeId;
+    const rawStars = req.body?.stars;
+    const stars = Number(rawStars);
+
+    if (!recipeId) {
+      return res.status(400).json({ error: "recipeId is required" });
+    }
+
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+      return res.status(400).json({ error: "stars must be an integer from 1 to 5" });
+    }
+
+    const details = await getRecipeDetails(recipeId, req.user!.userid);
+    if (!details) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    await setRecipeRating(
+      req.user!.userid,
+      recipeId,
+      stars,
+      typeof req.body?.comment === "string" ? req.body.comment : undefined
+    );
+
+    const rating = await getRecipeRatingSummary(recipeId, req.user!.userid);
+    return res.json({ success: true, rating });
+  } catch (err) {
+    console.error("Error setting recipe rating:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

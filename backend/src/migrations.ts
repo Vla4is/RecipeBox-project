@@ -202,17 +202,29 @@ async function createTables() {
     // ensure reviews table
     if (await tableExists('reviews')) {
       console.log('Reviews table already exists, skipping creation');
+      await pool.query(`
+        DELETE FROM reviews r1
+        USING reviews r2
+        WHERE r1.reviewid <> r2.reviewid
+          AND r1.userid = r2.userid
+          AND r1.recipeid = r2.recipeid
+          AND r1.created_at < r2.created_at
+      `);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_user_recipe_unique ON reviews(userid, recipeid)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_reviews_recipe_created ON reviews(recipeid, created_at DESC)`);
     } else {
       await pool.query(`
         CREATE TABLE reviews (
           reviewid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
           recipeid UUID NOT NULL REFERENCES recipes(recipeid) ON DELETE CASCADE,
-          stars INT NOT NULL,
+          stars INT NOT NULL CHECK (stars >= 1 AND stars <= 5),
           comment TEXT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(userid, recipeid)
         );
       `);
+      await pool.query(`CREATE INDEX idx_reviews_recipe_created ON reviews(recipeid, created_at DESC)`);
       console.log('Reviews table created successfully');
     }
 

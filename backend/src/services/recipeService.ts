@@ -38,6 +38,12 @@ export interface RecipeDetail {
   tags: string[];
 }
 
+export interface RecipeRatingSummary {
+  averageRating: number;
+  totalRatings: number;
+  userRating: number | null;
+}
+
 export async function getPublicRecipes(): Promise<RecipeRow[]> {
   const res = await pool.query(
     `SELECT recipeid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
@@ -211,6 +217,12 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
   const res = await pool.query(
     `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.proptimemin, r.cooktimemin, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at
      FROM recipes r
+     LEFT JOIN (
+       SELECT recipeid,
+              ((AVG(stars)::float - 1) / 4) * (COUNT(*)::float / (COUNT(*)::float + 4)) AS rating_score
+       FROM reviews
+       GROUP BY recipeid
+     ) rating ON rating.recipeid = r.recipeid
      WHERE (r.visibility = 'PUBLIC' OR ($1::uuid IS NOT NULL AND r.userid = $1::uuid))
        AND (
          $2::text = ''
@@ -245,6 +257,10 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
          WHEN COALESCE(r.description, '') ILIKE $3 THEN 3
          ELSE 4
        END,
+       CASE
+         WHEN $1::uuid IS NOT NULL THEN COALESCE(rating.rating_score, 0)
+         ELSE 0
+       END DESC,
        r.created_at DESC
      LIMIT $7`,
     [input.userid ?? null, normalizedTerm, pattern, maxPrep, maxCook, difficulties, safeLimit]
@@ -319,6 +335,38 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
     steps: stepsRes.rows,
     tags: tagsRes.rows.map((row) => row.name),
   };
+}
+
+export async function getRecipeRatingSummary(recipeId: string, userid?: string): Promise<RecipeRatingSummary> {
+  const res = await pool.query(
+    `SELECT
+       COALESCE(AVG(stars)::float, 0) AS average_rating,
+       COUNT(*)::int AS total_ratings,
+       MAX(CASE WHEN userid = $2::uuid THEN stars ELSE NULL END)::int AS user_rating
+     FROM reviews
+     WHERE recipeid = $1::uuid`,
+    [recipeId, userid ?? null]
+  );
+
+  const row = res.rows[0] as { average_rating: number | null; total_ratings: number; user_rating: number | null };
+  return {
+    averageRating: Number(row.average_rating || 0),
+    totalRatings: Number(row.total_ratings || 0),
+    userRating: row.user_rating == null ? null : Number(row.user_rating),
+  };
+}
+
+export async function setRecipeRating(userid: string, recipeId: string, stars: number, comment?: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO reviews (userid, recipeid, stars, comment)
+     VALUES ($1::uuid, $2::uuid, $3::int, $4)
+     ON CONFLICT (userid, recipeid)
+     DO UPDATE SET
+       stars = EXCLUDED.stars,
+       comment = COALESCE(EXCLUDED.comment, reviews.comment),
+       created_at = CURRENT_TIMESTAMP`,
+    [userid, recipeId, stars, comment ?? null]
+  );
 }
 
 export interface CreateRecipeInput {
