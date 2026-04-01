@@ -3,6 +3,8 @@ import seedRecipes from "./seedRecipes";
 
 async function createTables() {
   try {
+    await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+
     // helper to check table existence
     async function tableExists(name: string): Promise<boolean> {
       const res = await pool.query(
@@ -79,6 +81,9 @@ async function createTables() {
     // ensure recipes table
     if (await tableExists('recipes')) {
       console.log('Recipes table already exists, skipping creation');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_recipes_title_trgm ON recipes USING GIN (title gin_trgm_ops)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_recipes_description_trgm ON recipes USING GIN (description gin_trgm_ops)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_recipes_visibility_user ON recipes(visibility, userid)`);
       // ensure image_url column exists (added later)
       const colCheck = await pool.query(
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'image_url'`
@@ -112,6 +117,9 @@ async function createTables() {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
+      await pool.query(`CREATE INDEX idx_recipes_title_trgm ON recipes USING GIN (title gin_trgm_ops)`);
+      await pool.query(`CREATE INDEX idx_recipes_description_trgm ON recipes USING GIN (description gin_trgm_ops)`);
+      await pool.query(`CREATE INDEX idx_recipes_visibility_user ON recipes(visibility, userid)`);
       console.log('Recipes table created successfully');
     }
 
@@ -171,6 +179,8 @@ async function createTables() {
     // ensure tags table
     if (await tableExists('tags')) {
       console.log('Tags table already exists, skipping creation');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_tags_recipeid_name ON tags(recipeid, name)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_tags_name_trgm ON tags USING GIN (name gin_trgm_ops)`);
     } else {
       await pool.query(`
         CREATE TABLE tags (
@@ -181,6 +191,8 @@ async function createTables() {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
+      await pool.query(`CREATE INDEX idx_tags_recipeid_name ON tags(recipeid, name)`);
+      await pool.query(`CREATE INDEX idx_tags_name_trgm ON tags USING GIN (name gin_trgm_ops)`);
       console.log('Tags table created successfully');
     }
 
