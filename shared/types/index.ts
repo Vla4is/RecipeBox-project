@@ -93,3 +93,23 @@ export interface ShoppingItem {
   createdAt: string; // ISO timestamp
   updatedAt: string; // ISO timestamp
 }
+
+// User subscription
+export interface Subscription {
+  subscriptionId: string; // UUID
+  userId: string; // UUID
+  subscriptionStartDate: string; // ISO timestamp
+  subscriptionEndDate: string; // ISO timestamp
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}
+
+// User profile with premium status
+export interface User {
+  userId: string; // UUID
+  name: string;
+  email: string;
+  isPremium: boolean; // Computed: true if subscription exists and subscription_end_date > NOW()
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp
+}

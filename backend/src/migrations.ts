@@ -270,6 +270,33 @@ async function createTables() {
       console.log('Anonymous recipe events table created successfully');
     }
 
+    // ensure subscriptions table
+    if (await tableExists('subscriptions')) {
+      console.log('Subscriptions table already exists, skipping creation');
+      // ensure is_premium computed from subscription dates is working
+      const columnCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'subscriptions' AND column_name = 'subscription_start_date'`
+      );
+      if (columnCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE subscriptions ADD COLUMN subscription_start_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+        console.log('Added subscription_start_date column to subscriptions table');
+      }
+    } else {
+      await pool.query(`
+        CREATE TABLE subscriptions (
+          subscriptionid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          userid UUID NOT NULL UNIQUE REFERENCES users(userid) ON DELETE CASCADE,
+          subscription_start_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          subscription_end_date TIMESTAMP NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscriptions_userid ON subscriptions(userid)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscriptions_end_date ON subscriptions(subscription_end_date)`);
+      console.log('Subscriptions table created successfully');
+    }
+
     // ensure shopping_list table
     if (await tableExists('shopping_list')) {
       console.log('Shopping list table already exists, skipping creation');

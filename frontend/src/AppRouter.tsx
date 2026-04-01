@@ -11,6 +11,7 @@ import AddRecipe from "./AddRecipe";
 import RecipeDetails from "./RecipeDetails";
 import MyRecipes from "./MyRecipes";
 import EditRecipe from "./EditRecipe";
+import Premium from "./Premium";
 import { getTokenExpiryMs, isTokenExpired } from "./auth";
 
 const SCROLL_POSITIONS_KEY = "itsystems_scroll_positions_v1";
@@ -139,6 +140,11 @@ export default function AppRouter() {
         <Route path="/edit-recipe/:recipeId" element={
           <RequireAuth loggedIn={!!token}>
             <EditRecipe token={token!} onUnauthorized={handleLogout} />
+          </RequireAuth>
+        } />
+        <Route path="/premium" element={
+          <RequireAuth loggedIn={!!token}>
+            <Premium />
           </RequireAuth>
         } />
         <Route path="/recipes/:recipeId" element={<RecipeDetails />} />

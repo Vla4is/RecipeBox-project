@@ -28,6 +28,13 @@ import {
   recordAnonymousRecipeEvent,
   RecipeEventType,
 } from "./services/recommendationService";
+import {
+  isUserPremium,
+  getSubscriptionByUserId,
+  createSubscription,
+  renewSubscription,
+  cancelSubscription,
+} from "./services/subscriptionService";
 import seedRecipes from "./seedRecipes";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
@@ -495,6 +502,120 @@ app.delete("/api/recipes/:recipeId", requireAuth, async (req: AuthRequest, res: 
     return res.json({ success: true });
   } catch (err) {
     console.error("Delete recipe error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Subscription endpoints
+/**
+ * Check if current user is premium
+ */
+app.get("/api/subscription/status", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const isPremium = await isUserPremium(req.user!.userid);
+    return res.json({ isPremium });
+  } catch (err) {
+    console.error("Error checking premium status:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Get current subscription details
+ */
+app.get("/api/subscription/details", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const subscription = await getSubscriptionByUserId(req.user!.userid);
+    if (!subscription) {
+      return res.status(404).json({ error: "No active subscription found" });
+    }
+    return res.json({
+      subscriptionId: subscription.subscriptionid,
+      userId: subscription.userid,
+      startDate: subscription.subscription_start_date,
+      endDate: subscription.subscription_end_date,
+      createdAt: subscription.created_at,
+      updatedAt: subscription.updated_at,
+    });
+  } catch (err) {
+    console.error("Error fetching subscription details:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Create a new subscription (simulate payment processed)
+ * In a real app, this would be called after Stripe/PayPal validates payment
+ */
+app.post("/api/subscription/create", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    // Check if user already has an active subscription
+    const existingSubscription = await getSubscriptionByUserId(req.user!.userid);
+    if (existingSubscription) {
+      const isPremium = await isUserPremium(req.user!.userid);
+      if (isPremium) {
+        return res.status(409).json({ error: "User already has an active subscription" });
+      }
+    }
+
+    const subscription = await createSubscription(req.user!.userid);
+    return res.status(201).json({
+      success: true,
+      subscription: {
+        subscriptionId: subscription.subscriptionid,
+        userId: subscription.userid,
+        startDate: subscription.subscription_start_date,
+        endDate: subscription.subscription_end_date,
+        createdAt: subscription.created_at,
+      },
+    });
+  } catch (err) {
+    console.error("Error creating subscription:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Renew an existing subscription for another month
+ */
+app.post("/api/subscription/renew", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const subscription = await getSubscriptionByUserId(req.user!.userid);
+    if (!subscription) {
+      return res.status(404).json({ error: "No subscription found to renew" });
+    }
+
+    const renewed = await renewSubscription(req.user!.userid);
+    return res.json({
+      success: true,
+      subscription: {
+        subscriptionId: renewed.subscriptionid,
+        userId: renewed.userid,
+        startDate: renewed.subscription_start_date,
+        endDate: renewed.subscription_end_date,
+        updatedAt: renewed.updated_at,
+      },
+    });
+  } catch (err) {
+    console.error("Error renewing subscription:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * Cancel a subscription (downgrade from premium)
+ */
+app.post("/api/subscription/cancel", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const subscription = await getSubscriptionByUserId(req.user!.userid);
+    if (!subscription) {
+      return res.status(404).json({ error: "No subscription found to cancel" });
+    }
+
+    await cancelSubscription(req.user!.userid);
+    return res.json({ success: true, message: "Subscription cancelled successfully" });
+  } catch (err) {
+    console.error("Error cancelling subscription:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
