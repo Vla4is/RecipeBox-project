@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import "./App.css";
 
@@ -131,6 +131,7 @@ const cardVariants = {
 
 export default function Premium() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isPremium, setIsPremium] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,101 +141,74 @@ export default function Premium() {
 
   const token = localStorage.getItem("jwt_token");
 
-  useEffect(() => {
+  const loadSubscriptionState = async () => {
     if (!token) {
       navigate("/login");
       return;
     }
-
-    // Check premium status and fetch subscription details
-    Promise.all([
-      fetch("/api/subscription/status", {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((r) => r.json()),
-      fetch("/api/subscription/details", {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((r) => r.json()),
-    ])
-      .then(([statusData, detailsData]) => {
-        setIsPremium(statusData.isPremium || false);
-        if (detailsData && !detailsData.error) {
-          setSubscription(detailsData);
-        }
-      })
-      .catch((err) => {
-        console.error("Error loading subscription:", err);
-        setError("Failed to load subscription information");
-      })
-      .finally(() => setLoading(false));
-  }, [token, navigate]);
-
-  const handleBecomePremium = async () => {
-    if (!token) {
-      navigate("/login");
-      return;
-    }
-
-    setIsProcessing(true);
-    setError("");
-    setSuccess("");
 
     try {
-      const response = await fetch("/api/subscription/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const [statusResponse, detailsResponse] = await Promise.all([
+        fetch("/api/subscription/status", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch("/api/subscription/details", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
 
-      const data = await response.json();
+      const statusData = await statusResponse.json();
+      const detailsData = detailsResponse.ok ? await detailsResponse.json() : null;
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create subscription");
-      }
-
-      setIsPremium(true);
-      setSubscription(data.subscription);
-      setSuccess("Premium is now active.");
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to process subscription"));
+      setIsPremium(statusData.isPremium || false);
+      setSubscription(detailsData && !detailsData.error ? detailsData : null);
+    } catch (err) {
+      console.error("Error loading subscription:", err);
+      setError("Failed to load subscription information");
     } finally {
-      setIsProcessing(false);
+      setLoading(false);
     }
   };
 
-  const handleRenew = async () => {
+  useEffect(() => {
+    void loadSubscriptionState();
+  }, [token, navigate]);
+
+  useEffect(() => {
+    const routeState = location.state && typeof location.state === "object"
+      ? (location.state as { billingMessage?: string; refreshSubscription?: boolean })
+      : null;
+    const billingMessage = routeState?.billingMessage ?? "";
+    const refreshSubscription = routeState?.refreshSubscription === true;
+
+    if (billingMessage) {
+      setSuccess(billingMessage);
+    }
+
+    if (refreshSubscription) {
+      setLoading(true);
+      void loadSubscriptionState();
+    }
+
+    if (billingMessage || refreshSubscription) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location, navigate]);
+
+  const handleBecomePremium = () => {
     if (!token) {
       navigate("/login");
       return;
     }
+    navigate("/billing?mode=create");
+  };
 
-    setIsProcessing(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      const response = await fetch("/api/subscription/renew", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to renew subscription");
-      }
-
-      setSubscription(data.subscription);
-      setSuccess("Subscription renewed for another month.");
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, "Failed to renew subscription"));
-    } finally {
-      setIsProcessing(false);
+  const handleRenew = () => {
+    if (!token) {
+      navigate("/login");
+      return;
     }
+    navigate("/billing?mode=renew");
   };
 
   const handleCancel = async () => {

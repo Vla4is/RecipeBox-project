@@ -35,6 +35,7 @@ import {
   renewSubscription,
   cancelSubscription,
 } from "./services/subscriptionService";
+import { processPremiumCheckout } from "./services/billingService";
 import seedRecipes from "./seedRecipes";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
@@ -616,6 +617,58 @@ app.post("/api/subscription/cancel", requireAuth, async (req: AuthRequest, res: 
     return res.json({ success: true, message: "Subscription cancelled successfully" });
   } catch (err) {
     console.error("Error cancelling subscription:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/billing/checkout", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const {
+      mode,
+      cardholderName,
+      cardNumber,
+      expiryMonth,
+      expiryYear,
+      cvc,
+      billingEmail,
+    } = req.body || {};
+
+    const result = await processPremiumCheckout({
+      userId: req.user!.userid,
+      mode,
+      cardholderName: String(cardholderName || ""),
+      cardNumber: String(cardNumber || ""),
+      expiryMonth: Number(expiryMonth),
+      expiryYear: Number(expiryYear),
+      cvc: String(cvc || ""),
+      billingEmail: String(billingEmail || ""),
+    });
+
+    return res.status(201).json({
+      success: true,
+      payment: result.payment,
+      subscription: result.subscription,
+    });
+  } catch (err) {
+    console.error("Error processing billing checkout:", err);
+    const typedErr = err as Error & { code?: string };
+
+    if (typedErr.code === "BILLING_VALIDATION_ERROR") {
+      return res.status(400).json({ error: typedErr.message });
+    }
+
+    if (typedErr.code === "PAYMENT_DECLINED") {
+      return res.status(402).json({ error: typedErr.message });
+    }
+
+    if (typedErr.code === "SUBSCRIPTION_EXISTS") {
+      return res.status(409).json({ error: typedErr.message });
+    }
+
+    if (typedErr.code === "SUBSCRIPTION_MISSING") {
+      return res.status(404).json({ error: typedErr.message });
+    }
+
     return res.status(500).json({ error: "Internal server error" });
   }
 });

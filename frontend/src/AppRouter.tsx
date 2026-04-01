@@ -12,6 +12,7 @@ import RecipeDetails from "./RecipeDetails";
 import MyRecipes from "./MyRecipes";
 import EditRecipe from "./EditRecipe";
 import Premium from "./Premium";
+import Billing from "./Billing";
 import { getTokenExpiryMs, isTokenExpired } from "./auth";
 
 const SCROLL_POSITIONS_KEY = "itsystems_scroll_positions_v1";
@@ -145,6 +146,11 @@ export default function AppRouter() {
         <Route path="/premium" element={
           <RequireAuth loggedIn={!!token}>
             <Premium />
+          </RequireAuth>
+        } />
+        <Route path="/billing" element={
+          <RequireAuth loggedIn={!!token}>
+            <Billing />
           </RequireAuth>
         } />
         <Route path="/recipes/:recipeId" element={<RecipeDetails />} />

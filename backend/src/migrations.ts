@@ -61,6 +61,24 @@ async function createTables() {
       console.log('Created recipe_event_type_enum type');
     }
 
+    if (await typeExists('payment_status_enum')) {
+      console.log('payment_status_enum type already exists');
+    } else {
+      await pool.query(`
+        CREATE TYPE payment_status_enum AS ENUM ('SUCCEEDED', 'DECLINED', 'FAILED');
+      `);
+      console.log('Created payment_status_enum type');
+    }
+
+    if (await typeExists('payment_provider_enum')) {
+      console.log('payment_provider_enum type already exists');
+    } else {
+      await pool.query(`
+        CREATE TYPE payment_provider_enum AS ENUM ('MOCKCARD');
+      `);
+      console.log('Created payment_provider_enum type');
+    }
+
     // ensure users table
     if (await tableExists('users')) {
       console.log('Users table already exists, skipping creation');
@@ -307,6 +325,35 @@ async function createTables() {
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscriptions_userid ON subscriptions(userid)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_subscriptions_end_date ON subscriptions(subscription_end_date)`);
       console.log('Subscriptions table created successfully');
+    }
+
+    if (await tableExists('payments')) {
+      console.log('Payments table already exists, skipping creation');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_payments_user_created ON payments(userid, created_at DESC)`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_provider_transaction_unique ON payments(provider_transaction_id)`);
+    } else {
+      await pool.query(`
+        CREATE TABLE payments (
+          paymentid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+          subscriptionid UUID REFERENCES subscriptions(subscriptionid) ON DELETE SET NULL,
+          status payment_status_enum NOT NULL,
+          provider payment_provider_enum NOT NULL,
+          provider_transaction_id VARCHAR(255) NOT NULL,
+          amount_cents INT NOT NULL CHECK (amount_cents > 0),
+          currency VARCHAR(3) NOT NULL,
+          cardholder_name VARCHAR(255) NOT NULL,
+          card_brand VARCHAR(64) NOT NULL,
+          card_last4 VARCHAR(4) NOT NULL,
+          billing_email VARCHAR(255) NOT NULL,
+          failure_reason TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await pool.query(`CREATE INDEX idx_payments_user_created ON payments(userid, created_at DESC)`);
+      await pool.query(`CREATE UNIQUE INDEX idx_payments_provider_transaction_unique ON payments(provider_transaction_id)`);
+      console.log('Payments table created successfully');
     }
 
     // ensure shopping_list table
