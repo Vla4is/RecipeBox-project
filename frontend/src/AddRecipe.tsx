@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import "./App.css";
 
@@ -17,6 +18,52 @@ interface Ingredient {
   unit: string;
   notes: string;
 }
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.08,
+      delayChildren: 0.1,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.45, ease: "easeOut" as const },
+  },
+};
+
+const cardVariants = {
+  hidden: { opacity: 0, y: 28, scale: 0.985 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.55, ease: "easeOut" as const },
+  },
+};
+
+const listItemVariants = {
+  hidden: { opacity: 0, y: 18, scale: 0.98 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.28, ease: "easeOut" as const },
+  },
+  exit: {
+    opacity: 0,
+    y: -12,
+    scale: 0.97,
+    transition: { duration: 0.2, ease: "easeIn" as const },
+  },
+};
 
 export default function AddRecipe({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
   const navigate = useNavigate();
@@ -170,17 +217,36 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
   };
 
   return (
-    <div className="add-recipe-page">
-      <div className="add-recipe-card">
-        <div className="auth-header">
+    <motion.div
+      className="add-recipe-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.45, ease: "easeOut" }}
+    >
+      <motion.div
+        className="add-recipe-card"
+        variants={cardVariants}
+        initial="hidden"
+        animate="visible"
+        whileHover={{ y: -4, boxShadow: "0 24px 72px rgba(0, 0, 0, 0.44)" }}
+      >
+        <motion.div className="auth-header" variants={containerVariants} initial="hidden" animate="visible">
           <div className="auth-logo">📝</div>
-          <h2 className="auth-title">Add a Recipe</h2>
-          <p className="auth-subtitle">Share your culinary creation with the community</p>
-        </div>
+          <motion.h2 className="auth-title" variants={itemVariants}>Add a Recipe</motion.h2>
+          <motion.p className="auth-subtitle" variants={itemVariants}>
+            Share your culinary creation with the community
+          </motion.p>
+        </motion.div>
 
-        <form onSubmit={handleSubmit} className="add-recipe-form">
+        <motion.form
+          onSubmit={handleSubmit}
+          className="add-recipe-form"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           {/* Basic Info Section */}
-          <div className="add-recipe-section">
+          <motion.div className="add-recipe-section" variants={itemVariants}>
             <h3 className="add-recipe-section-title">Basic Information</h3>
             
             <div className="auth-field">
@@ -317,109 +383,141 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
                 </select>
               </div>
             </div>
-          </div>
+          </motion.div>
 
           {/* Ingredients Section */}
-          <div className="add-recipe-section">
+          <motion.div className="add-recipe-section" variants={itemVariants}>
             <h3 className="add-recipe-section-title">Ingredients</h3>
-            {ingredients.map((ing, idx) => (
-              <div key={idx} className="add-recipe-list-item">
-                <div className="add-recipe-list-item-fields">
-                  <input
-                    type="text"
-                    placeholder="Ingredient name"
-                    value={ing.name}
-                    onChange={(e) => updateIngredient(idx, "name", e.target.value)}
-                    className="auth-input"
-                    style={{ flex: 2 }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="Amount"
-                    value={ing.amount}
-                    onChange={(e) => updateIngredient(idx, "amount", e.target.value)}
-                    className="auth-input"
-                    style={{ flex: 1 }}
-                    step="0.1"
-                  />
-                  <select
-                    value={ing.unit}
-                    onChange={(e) => updateIngredient(idx, "unit", e.target.value)}
-                    className="auth-input add-recipe-select"
-                    style={{ flex: 1 }}
-                  >
-                    {UNIT_OPTIONS.map((u) => (
-                      <option key={u} value={u}>{u}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="Notes (optional)"
-                    value={ing.notes}
-                    onChange={(e) => updateIngredient(idx, "notes", e.target.value)}
-                    className="auth-input"
-                    style={{ flex: 2 }}
-                  />
-                </div>
-                {ingredients.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeIngredient(idx)}
-                    className="add-recipe-remove-btn"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
-            <button type="button" onClick={addIngredient} className="add-recipe-add-btn">
+            <AnimatePresence initial={false}>
+              {ingredients.map((ing, idx) => (
+                <motion.div
+                  key={`ingredient-${idx}`}
+                  className="add-recipe-list-item"
+                  variants={listItemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  layout
+                >
+                  <div className="add-recipe-list-item-fields">
+                    <input
+                      type="text"
+                      placeholder="Ingredient name"
+                      value={ing.name}
+                      onChange={(e) => updateIngredient(idx, "name", e.target.value)}
+                      className="auth-input"
+                      style={{ flex: 2 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Amount"
+                      value={ing.amount}
+                      onChange={(e) => updateIngredient(idx, "amount", e.target.value)}
+                      className="auth-input"
+                      style={{ flex: 1 }}
+                      step="0.1"
+                    />
+                    <select
+                      value={ing.unit}
+                      onChange={(e) => updateIngredient(idx, "unit", e.target.value)}
+                      className="auth-input add-recipe-select"
+                      style={{ flex: 1 }}
+                    >
+                      {UNIT_OPTIONS.map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Notes (optional)"
+                      value={ing.notes}
+                      onChange={(e) => updateIngredient(idx, "notes", e.target.value)}
+                      className="auth-input"
+                      style={{ flex: 2 }}
+                    />
+                  </div>
+                  {ingredients.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeIngredient(idx)}
+                      className="add-recipe-remove-btn"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <motion.button
+              type="button"
+              onClick={addIngredient}
+              className="add-recipe-add-btn"
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.985 }}
+            >
               + Add Ingredient
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
 
           {/* Steps Section */}
-          <div className="add-recipe-section">
+          <motion.div className="add-recipe-section" variants={itemVariants}>
             <h3 className="add-recipe-section-title">Instructions</h3>
-            {steps.map((step, idx) => (
-              <div key={idx} className="add-recipe-list-item">
-                <div className="add-recipe-step-number">{idx + 1}</div>
-                <div className="add-recipe-list-item-fields">
-                  <textarea
-                    placeholder="Step instruction..."
-                    value={step.instruction}
-                    onChange={(e) => updateStep(idx, "instruction", e.target.value)}
-                    className="auth-input add-recipe-textarea"
-                    rows={2}
-                    style={{ flex: 3 }}
-                  />
-                  <input
-                    type="number"
-                    placeholder="Timer (sec)"
-                    value={step.timerSec}
-                    onChange={(e) => updateStep(idx, "timerSec", e.target.value)}
-                    className="auth-input"
-                    style={{ flex: 1 }}
-                    min={0}
-                  />
-                </div>
-                {steps.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeStep(idx)}
-                    className="add-recipe-remove-btn"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
-            ))}
-            <button type="button" onClick={addStep} className="add-recipe-add-btn">
+            <AnimatePresence initial={false}>
+              {steps.map((step, idx) => (
+                <motion.div
+                  key={`step-${idx}`}
+                  className="add-recipe-list-item"
+                  variants={listItemVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  layout
+                >
+                  <div className="add-recipe-step-number">{idx + 1}</div>
+                  <div className="add-recipe-list-item-fields">
+                    <textarea
+                      placeholder="Step instruction..."
+                      value={step.instruction}
+                      onChange={(e) => updateStep(idx, "instruction", e.target.value)}
+                      className="auth-input add-recipe-textarea"
+                      rows={2}
+                      style={{ flex: 3 }}
+                    />
+                    <input
+                      type="number"
+                      placeholder="Timer (sec)"
+                      value={step.timerSec}
+                      onChange={(e) => updateStep(idx, "timerSec", e.target.value)}
+                      className="auth-input"
+                      style={{ flex: 1 }}
+                      min={0}
+                    />
+                  </div>
+                  {steps.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeStep(idx)}
+                      className="add-recipe-remove-btn"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <motion.button
+              type="button"
+              onClick={addStep}
+              className="add-recipe-add-btn"
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.985 }}
+            >
               + Add Step
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
 
           {/* Tags Section */}
-          <div className="add-recipe-section">
+          <motion.div className="add-recipe-section" variants={itemVariants}>
             <h3 className="add-recipe-section-title">Tags</h3>
             <div className="auth-field">
               <label className="auth-label" htmlFor="recipe-tags">Tags (comma-separated)</label>
@@ -432,15 +530,31 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
                 className="auth-input"
               />
             </div>
-          </div>
+          </motion.div>
 
-          <button type="submit" disabled={loading} className="auth-btn">
+          <motion.button
+            type="submit"
+            disabled={loading}
+            className="auth-btn"
+            variants={itemVariants}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.985 }}
+          >
             {loading ? "Publishing..." : "Publish Recipe"}
-          </button>
+          </motion.button>
 
-          {error && <div className="auth-error">{error}</div>}
-        </form>
-      </div>
-    </div>
+          {error && (
+            <motion.div
+              className="auth-error"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22 }}
+            >
+              {error}
+            </motion.div>
+          )}
+        </motion.form>
+      </motion.div>
+    </motion.div>
   );
 }
