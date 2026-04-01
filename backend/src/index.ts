@@ -16,12 +16,12 @@ import {
   isRecipeSaved,
   saveRecipeForUser,
   removeSavedRecipeForUser,
-  searchRecipes,
   getRecipeTimeRanges,
   getHomeTagSections,
   getRecipeRatingSummary,
   setRecipeRating,
 } from "./services/recipeService";
+import { searchRecipes } from "./services/recipeSearchService";
 import {
   getHomeRecommendations,
   recordRecipeEvent,
