@@ -129,6 +129,25 @@
   transform: translateY(-1px);
 }
 
+.navbar-brand:focus,
+.navbar-link:focus,
+.navbar-link-btn:focus,
+.navbar-premium-btn:focus,
+.navbar-logout:focus,
+.navbar-menu-toggle:focus {
+  outline: none;
+}
+
+.navbar-brand:focus-visible,
+.navbar-link:focus-visible,
+.navbar-link-btn:focus-visible,
+.navbar-premium-btn:focus-visible,
+.navbar-logout:focus-visible,
+.navbar-menu-toggle:focus-visible {
+  outline: 3px solid rgba(255, 209, 102, 0.55);
+  outline-offset: 2px;
+}
+
 .navbar-link-active {
   color: #fff4cf;
   background: rgba(255, 209, 102, 0.13);
