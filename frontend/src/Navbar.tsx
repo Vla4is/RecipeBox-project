@@ -26,19 +26,24 @@ export default function Navbar({ loggedIn, onLogout }: { loggedIn: boolean; onLo
   }, []);
 
   useEffect(() => {
-    // Check if user is premium
-    if (loggedIn) {
-      const token = localStorage.getItem("jwt_token");
-      if (token) {
-        fetch("/api/subscription/status", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-          .then((r) => r.json())
-          .then((data) => setIsPremium(data.isPremium || false))
-          .catch(() => setIsPremium(false));
-      }
+    if (!loggedIn) {
+      setIsPremium(false);
+      return;
     }
-  }, [loggedIn]);
+
+    const token = localStorage.getItem("jwt_token");
+    if (!token) {
+      setIsPremium(false);
+      return;
+    }
+
+    fetch("/api/subscription/status", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => setIsPremium(Boolean(data.isPremium)))
+      .catch(() => setIsPremium(false));
+  }, [loggedIn, location.pathname, location.search]);
 
   const goHomeAndReset = () => {
     setIsMenuOpen(false);
