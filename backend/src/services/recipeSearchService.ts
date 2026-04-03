@@ -1,11 +1,11 @@
 import pool from "../database";
-import type { RecipeRow } from "./recipeService";
+import { normalizeRecipeDietType, type RecipeDietType, type RecipeRow } from "./recipeService";
 
 export interface SearchRecipesInput {
   searchTerm?: string;
   userid?: string;
-  maxPrepTime?: number;
-  maxCookTime?: number;
+  maxTotalTime?: number;
+  dietType?: Exclude<RecipeDietType, "NONE">;
   difficulties?: Array<"EASY" | "MEDIUM" | "HARD">;
   limit?: number;
 }
@@ -60,8 +60,9 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
   const normalizedTerm = (input.searchTerm || "").trim();
   const searchTokens = extractSearchTokens(normalizedTerm);
   const tokenizedQuery = searchTokens.join(" ");
-  const maxPrep = Number.isFinite(input.maxPrepTime) ? input.maxPrepTime : null;
-  const maxCook = Number.isFinite(input.maxCookTime) ? input.maxCookTime : null;
+  const maxTotal = Number.isFinite(input.maxTotalTime) ? input.maxTotalTime : null;
+  const dietType = normalizeRecipeDietType(input.dietType);
+  const activeDietType = dietType === "NONE" ? null : dietType;
   const difficulties = (input.difficulties || []).filter((d) => ["EASY", "MEDIUM", "HARD"].includes(d));
   const safeLimit = Math.min(Math.max(input.limit ?? 120, 1), 300);
 
@@ -69,6 +70,12 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
   if (normalizedTerm !== "" && tokenizedQuery === "") {
     return [];
   }
+
+  const dietSearchTextSql = `CASE
+    WHEN r.diet_type = 'VEGAN' THEN 'vegan vegetarian plant-based'
+    WHEN r.diet_type = 'VEGETARIAN' THEN 'vegetarian meatless'
+    ELSE ''
+  END`;
 
   const res = await pool.query(
     `WITH search_params AS (
@@ -100,9 +107,11 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
          r.image_url,
          r.proptimemin,
          r.cooktimemin,
+         r.diet_type,
          r.servings,
          r.difficulty,
          r.visibility,
+         ${dietSearchTextSql} AS diet_search_text,
          r.created_at,
          r.updated_at,
          COALESCE(tr.tags_text, '') AS tags_text,
@@ -116,21 +125,25 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
            WHERE LOWER(r.title) LIKE '%' || token || '%'
               OR COALESCE(tr.tags_text, '') LIKE '%' || token || '%'
               OR LOWER(COALESCE(r.description, '')) LIKE '%' || token || '%'
-         )::int AS token_hit_count,
+              OR ${dietSearchTextSql} LIKE '%' || token || '%'
+          )::int AS token_hit_count,
          GREATEST(
            similarity(LOWER(r.title), sp.normalized_query),
            similarity(COALESCE(tr.tags_text, ''), sp.normalized_query),
            similarity(LOWER(COALESCE(r.description, '')), sp.normalized_query),
+           similarity(${dietSearchTextSql}, sp.normalized_query),
            word_similarity(sp.normalized_query, LOWER(r.title)),
            word_similarity(sp.normalized_query, COALESCE(tr.tags_text, '')),
-           word_similarity(sp.normalized_query, LOWER(COALESCE(r.description, '')))
+           word_similarity(sp.normalized_query, LOWER(COALESCE(r.description, ''))),
+           word_similarity(sp.normalized_query, ${dietSearchTextSql})
          ) AS best_similarity,
          CASE
            WHEN sp.normalized_query = '' THEN 0
            ELSE ts_rank_cd(
-             setweight(to_tsvector('english', COALESCE(r.title, '')), 'A') ||
-             setweight(to_tsvector('simple', COALESCE(tr.tags_text, '')), 'A') ||
-             setweight(to_tsvector('english', COALESCE(r.description, '')), 'B'),
+              setweight(to_tsvector('english', COALESCE(r.title, '')), 'A') ||
+              setweight(to_tsvector('simple', COALESCE(tr.tags_text, '')), 'A') ||
+             setweight(to_tsvector('english', COALESCE(r.description, '')), 'B') ||
+             setweight(to_tsvector('simple', ${dietSearchTextSql}), 'B'),
              plainto_tsquery('english', sp.normalized_query)
            )
          END AS text_rank,
@@ -139,6 +152,7 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
            WHEN COALESCE(tr.tags_text, '') = sp.normalized_query THEN 1.45
            WHEN LOWER(r.title) LIKE '%' || sp.normalized_query || '%' THEN 0.95
            WHEN COALESCE(tr.tags_text, '') LIKE '%' || sp.normalized_query || '%' THEN 0.85
+           WHEN ${dietSearchTextSql} LIKE '%' || sp.normalized_query || '%' THEN 0.75
            WHEN LOWER(COALESCE(r.description, '')) LIKE '%' || sp.normalized_query || '%' THEN 0.35
            ELSE 0
          END AS phrase_bonus
@@ -147,8 +161,12 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
        LEFT JOIN tag_rollup tr ON tr.recipeid = r.recipeid
        LEFT JOIN rating rt ON rt.recipeid = r.recipeid
        WHERE (r.visibility = 'PUBLIC' OR (sp.userid IS NOT NULL AND r.userid = sp.userid))
-         AND ($5::int IS NULL OR COALESCE(r.proptimemin, 0) <= $5)
-         AND ($6::int IS NULL OR COALESCE(r.cooktimemin, 0) <= $6)
+         AND ($5::int IS NULL OR r.totaltimemin <= $5)
+         AND (
+           $6::recipe_diet_enum IS NULL
+           OR ($6::recipe_diet_enum = 'VEGETARIAN' AND r.diet_type IN ('VEGETARIAN', 'VEGAN'))
+           OR ($6::recipe_diet_enum = 'VEGAN' AND r.diet_type = 'VEGAN')
+         )
          AND (COALESCE(array_length($7::difficulty_enum[], 1), 0) = 0 OR r.difficulty = ANY($7::difficulty_enum[]))
      )
      SELECT
@@ -159,6 +177,7 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
        ranked.image_url,
        ranked.proptimemin,
        ranked.cooktimemin,
+       ranked.diet_type,
        ranked.servings,
        ranked.difficulty,
        ranked.visibility,
@@ -195,7 +214,7 @@ export async function searchRecipes(input: SearchRecipesInput): Promise<RecipeRo
        END DESC,
        created_at DESC
      LIMIT $8`,
-    [input.userid ?? null, normalizedTerm, tokenizedQuery, searchTokens, maxPrep, maxCook, difficulties, safeLimit]
+    [input.userid ?? null, normalizedTerm, tokenizedQuery, searchTokens, maxTotal, activeDietType, difficulties, safeLimit]
   );
 
   return res.rows;

@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
+import { normalizeRecipeDietType } from "./recipeDiet";
 import "./App.css";
 
 const DIFFICULTY_OPTIONS = ["EASY", "MEDIUM", "HARD"] as const;
+const DIET_OPTIONS = ["NONE", "VEGETARIAN", "VEGAN"] as const;
 const VISIBILITY_OPTIONS = ["PUBLIC", "PRIVATE"] as const;
 const UNIT_OPTIONS = ["G", "KG", "ML", "L", "TSP", "TBSP", "CUP", "PCS"] as const;
 
@@ -28,6 +30,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
     prepTimeMin: "",
     cookTimeMin: "",
     servings: "",
+    dietType: "NONE" as string,
     difficulty: "EASY" as string,
     visibility: "PUBLIC" as string,
   });
@@ -62,6 +65,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
           prepTimeMin: r.proptimemin != null ? String(r.proptimemin) : "",
           cookTimeMin: r.cooktimemin != null ? String(r.cooktimemin) : "",
           servings: r.servings != null ? String(r.servings) : "",
+          dietType: normalizeRecipeDietType(r.diet_type),
           difficulty: r.difficulty || "EASY",
           visibility: r.visibility || "PUBLIC",
         });
@@ -177,6 +181,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
         image_url: form.image_url || undefined,
         prepTimeMin: form.prepTimeMin ? Number(form.prepTimeMin) : undefined,
         cookTimeMin: form.cookTimeMin ? Number(form.cookTimeMin) : undefined,
+        dietType: normalizeRecipeDietType(form.dietType),
         servings: form.servings ? Number(form.servings) : undefined,
         difficulty: form.difficulty,
         visibility: form.visibility,
@@ -341,6 +346,35 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
                   onChange={handleChange}
                   className="auth-input"
                 />
+              </div>
+            </div>
+
+            <div className="auth-field add-recipe-standalone-field">
+              <label className="auth-label">Diet Label</label>
+              <div className="diet-radio-group" role="radiogroup" aria-label="Diet label">
+                {DIET_OPTIONS.map((diet) => {
+                  const checked = form.dietType === diet;
+                  const icon = diet === "VEGAN" ? "🌿" : diet === "VEGETARIAN" ? "🥬" : "🍽️";
+                  const label = diet === "NONE" ? "No label" : diet.charAt(0) + diet.slice(1).toLowerCase();
+
+                  return (
+                    <label
+                      key={diet}
+                      className={`diet-radio-option ${checked ? "diet-radio-option-active" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="dietType"
+                        value={diet}
+                        checked={checked}
+                        onChange={handleChange}
+                        className="diet-radio-input"
+                      />
+                      <span className="diet-radio-icon" aria-hidden="true">{icon}</span>
+                      <span className="diet-radio-label">{label}</span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
 

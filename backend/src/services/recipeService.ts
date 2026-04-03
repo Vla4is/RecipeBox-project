@@ -8,11 +8,21 @@ export interface RecipeRow {
   image_url: string | null;
   proptimemin: number | null;
   cooktimemin: number | null;
+  diet_type: RecipeDietType;
   servings: number | null;
   difficulty: string | null;
   visibility: string | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export type RecipeDietType = "NONE" | "VEGETARIAN" | "VEGAN";
+
+export function normalizeRecipeDietType(value: unknown): RecipeDietType {
+  const normalized = typeof value === "string" ? value.toUpperCase() : "NONE";
+  if (normalized === "VEGAN") return "VEGAN";
+  if (normalized === "VEGETARIAN") return "VEGETARIAN";
+  return "NONE";
 }
 
 export interface RecipeDetailIngredient {
@@ -46,7 +56,7 @@ export interface RecipeRatingSummary {
 
 export async function getPublicRecipes(): Promise<RecipeRow[]> {
   const res = await pool.query(
-    `SELECT recipeid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, title, description, image_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
      WHERE visibility = 'PUBLIC'
      ORDER BY created_at DESC`
@@ -55,10 +65,8 @@ export async function getPublicRecipes(): Promise<RecipeRow[]> {
 }
 
 export interface RecipeTimeRanges {
-  minPrepTime: number;
-  maxPrepTime: number;
-  minCookTime: number;
-  maxCookTime: number;
+  minTotalTime: number;
+  maxTotalTime: number;
 }
 
 export interface HomeTagSection {
@@ -125,6 +133,7 @@ export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Prom
          r.image_url,
          r.proptimemin,
          r.cooktimemin,
+         r.diet_type,
          r.servings,
          r.difficulty,
          r.visibility,
@@ -153,6 +162,7 @@ export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Prom
             image_url,
             proptimemin,
             cooktimemin,
+            diet_type,
             servings,
             difficulty,
             visibility,
@@ -175,6 +185,7 @@ export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Prom
       image_url: row.image_url,
       proptimemin: row.proptimemin,
       cooktimemin: row.cooktimemin,
+      diet_type: normalizeRecipeDietType(row.diet_type),
       servings: row.servings,
       difficulty: row.difficulty,
       visibility: row.visibility,
@@ -200,10 +211,8 @@ export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Prom
 export async function getRecipeTimeRanges(userid?: string): Promise<RecipeTimeRanges> {
   const res = await pool.query(
     `SELECT
-       COALESCE(MIN(r.proptimemin), 0) AS "minPrepTime",
-       COALESCE(MAX(r.proptimemin), 0) AS "maxPrepTime",
-       COALESCE(MIN(r.cooktimemin), 0) AS "minCookTime",
-       COALESCE(MAX(r.cooktimemin), 0) AS "maxCookTime"
+       COALESCE(MIN(r.totaltimemin), 0) AS "minTotalTime",
+       COALESCE(MAX(r.totaltimemin), 0) AS "maxTotalTime"
      FROM recipes r
      WHERE (r.visibility = 'PUBLIC' OR ($1::uuid IS NOT NULL AND r.userid = $1::uuid))`,
     [userid ?? null]
@@ -211,16 +220,14 @@ export async function getRecipeTimeRanges(userid?: string): Promise<RecipeTimeRa
 
   const row = res.rows[0] as Record<string, unknown>;
   return {
-    minPrepTime: Number(row.minPrepTime ?? 0),
-    maxPrepTime: Number(row.maxPrepTime ?? 0),
-    minCookTime: Number(row.minCookTime ?? 0),
-    maxCookTime: Number(row.maxCookTime ?? 0),
+    minTotalTime: Number(row.minTotalTime ?? 0),
+    maxTotalTime: Number(row.maxTotalTime ?? 0),
   };
 }
 
 export async function getRecipeDetails(recipeId: string, userid?: string): Promise<RecipeDetail | null> {
   const recipeRes = await pool.query(
-    `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
      WHERE recipeid = $1 AND (visibility = 'PUBLIC' OR ($2::uuid IS NOT NULL AND userid = $2::uuid))`,
     [recipeId, userid ?? null]
@@ -304,6 +311,7 @@ export interface CreateRecipeInput {
   image_url?: string;
   prepTimeMin?: number;
   cookTimeMin?: number;
+  dietType?: RecipeDietType;
   servings?: number;
   difficulty?: "EASY" | "MEDIUM" | "HARD";
   visibility?: "PRIVATE" | "PUBLIC";
@@ -319,9 +327,9 @@ export async function createRecipe(input: CreateRecipeInput): Promise<RecipeRow>
     
     // Insert main recipe
     const recipeRes = await client.query(
-      `INSERT INTO recipes (userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::difficulty_enum, $9::visibility_enum)
-       RETURNING recipeid, userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at`,
+      `INSERT INTO recipes (userid, title, description, image_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility)
+       VALUES ($1, $2, $3, $4, $5, $6, $7::recipe_diet_enum, $8, $9::difficulty_enum, $10::visibility_enum)
+       RETURNING recipeid, userid, title, description, image_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at`,
       [
         input.userid || null,
         input.title,
@@ -329,6 +337,7 @@ export async function createRecipe(input: CreateRecipeInput): Promise<RecipeRow>
         input.image_url || null,
         input.prepTimeMin ?? null,
         input.cookTimeMin ?? null,
+        normalizeRecipeDietType(input.dietType),
         input.servings ?? null,
         input.difficulty || "EASY",
         input.visibility || "PUBLIC",
@@ -403,7 +412,7 @@ export async function createRecipe(input: CreateRecipeInput): Promise<RecipeRow>
 
 export async function getUserRecipes(userid: string): Promise<RecipeRow[]> {
   const res = await pool.query(
-    `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
      WHERE userid = $1
      ORDER BY created_at DESC`,
@@ -414,7 +423,7 @@ export async function getUserRecipes(userid: string): Promise<RecipeRow[]> {
 
 export async function getSavedRecipes(userid: string): Promise<RecipeRow[]> {
   const res = await pool.query(
-    `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.proptimemin, r.cooktimemin, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at
+    `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.proptimemin, r.cooktimemin, r.diet_type, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at
      FROM favorites f
      JOIN recipes r ON r.recipeid = f.recipeid
      WHERE f.userid = $1::uuid
@@ -472,7 +481,7 @@ export async function removeSavedRecipeForUser(userid: string, recipeId: string)
 
 export async function getRecipeDetailsForOwner(recipeId: string, userid: string): Promise<RecipeDetail | null> {
   const recipeRes = await pool.query(
-    `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, userid, title, description, image_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
      WHERE recipeid = $1 AND userid = $2`,
     [recipeId, userid]
@@ -526,15 +535,16 @@ export async function updateRecipe(recipeId: string, userid: string, input: Crea
 
     // Update main recipe
     const recipeRes = await client.query(
-      `UPDATE recipes SET title = $1, description = $2, image_url = $3, proptimemin = $4, cooktimemin = $5, servings = $6, difficulty = $7::difficulty_enum, visibility = $8::visibility_enum, updated_at = CURRENT_TIMESTAMP
-       WHERE recipeid = $9 AND userid = $10
-       RETURNING recipeid, userid, title, description, image_url, proptimemin, cooktimemin, servings, difficulty, visibility, created_at, updated_at`,
+      `UPDATE recipes SET title = $1, description = $2, image_url = $3, proptimemin = $4, cooktimemin = $5, diet_type = $6::recipe_diet_enum, servings = $7, difficulty = $8::difficulty_enum, visibility = $9::visibility_enum, updated_at = CURRENT_TIMESTAMP
+       WHERE recipeid = $10 AND userid = $11
+       RETURNING recipeid, userid, title, description, image_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at`,
       [
         input.title,
         input.description || null,
         input.image_url || null,
         input.prepTimeMin ?? null,
         input.cookTimeMin ?? null,
+        normalizeRecipeDietType(input.dietType),
         input.servings ?? null,
         input.difficulty || "EASY",
         input.visibility || "PUBLIC",

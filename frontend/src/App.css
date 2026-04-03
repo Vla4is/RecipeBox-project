@@ -533,6 +533,27 @@
   letter-spacing: 0.8px;
 }
 
+.recipe-card-diet-badge {
+  left: 12px;
+  right: auto;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.diet-badge {
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.diet-badge-vegan {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.diet-badge-vegetarian {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .badge-easy {
   background: #c8e6c9;
   color: #2e7d32;
@@ -1626,6 +1647,60 @@
 .add-recipe-row .auth-field {
   flex: 1;
   min-width: 0;
+}
+
+.add-recipe-standalone-field {
+  margin-bottom: 20px;
+}
+
+.diet-radio-group {
+  display: flex;
+  gap: 16px;
+  flex-wrap: nowrap;
+}
+
+.diet-radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1 1 0;
+  justify-content: center;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.84);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.diet-radio-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 213, 79, 0.3);
+  background: rgba(255,255,255,0.08);
+}
+
+.diet-radio-option-active {
+  border-color: rgba(255, 213, 79, 0.58);
+  background: rgba(255, 213, 79, 0.12);
+  color: #fff;
+}
+
+.diet-radio-input {
+  accent-color: #ffd54f;
+  margin: 0;
+}
+
+.diet-radio-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.diet-radio-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .add-recipe-select {

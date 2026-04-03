@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { motion, useMotionValue, animate } from "framer-motion";
+import { getRecipeDietBadge, parseSearchDietFilter, type SearchDietFilter } from "./recipeDiet";
 import "./App.css";
 
 const categories = [
@@ -16,6 +17,7 @@ interface RecipeFromDB {
   proptimemin: number | null;
   difficulty: string | null;
   cooktimemin: number | null;
+  diet_type: string | null;
   servings: number | null;
 }
 
@@ -32,10 +34,8 @@ interface HomeTagSection {
 }
 
 interface RecipeTimeRanges {
-  minPrepTime: number;
-  maxPrepTime: number;
-  minCookTime: number;
-  maxCookTime: number;
+  minTotalTime: number;
+  maxTotalTime: number;
 }
 
 type DifficultyFilter = "EASY" | "MEDIUM" | "HARD";
@@ -43,9 +43,8 @@ type SearchSort = "relevance" | "total-time-asc" | "total-time-desc" | "title-as
 
 interface HomeViewState {
   searchTerm: string;
-  maxPrepTime: number;
-  maxCookTime: number;
   totalTime: number;
+  selectedDiet: SearchDietFilter | null;
   selectedDifficulty: DifficultyFilter | null;
   searchSort: SearchSort;
   showSearchResults: boolean;
@@ -62,10 +61,8 @@ const SEARCH_INITIAL_VISIBLE = 12;
 const SEARCH_LOAD_MORE_STEP = 12;
 
 const DEFAULT_TIME_RANGES: RecipeTimeRanges = {
-  minPrepTime: 0,
-  maxPrepTime: 120,
-  minCookTime: 0,
-  maxCookTime: 120,
+  minTotalTime: 0,
+  maxTotalTime: 240,
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -180,30 +177,22 @@ function Home() {
     const urlParams = new URLSearchParams(window.location.search);
 
     const qParam = urlParams.get("q");
-    const prepParam = parseOptionalNumber(urlParams.get("maxPrepTime"));
-    const cookParam = parseOptionalNumber(urlParams.get("maxCookTime"));
+    const totalTimeParam = parseOptionalNumber(urlParams.get("maxTotalTime"));
+    const dietParam = parseSearchDietFilter(urlParams.get("dietType"));
     const difficultyParam = parseDifficultyFilter(urlParams.get("difficulty"));
     const sortParamRaw = urlParams.get("sort");
     const sortParam = parseSearchSort(sortParamRaw);
-    const hasPersistedPrep = typeof persisted.maxPrepTime === "number";
-    const hasPersistedCook = typeof persisted.maxCookTime === "number";
-    const resolvedPrep = prepParam ?? (hasPersistedPrep ? persisted.maxPrepTime : undefined);
-    const resolvedCook = cookParam ?? (hasPersistedCook ? persisted.maxCookTime : undefined);
     const hasAnyUrlFilter =
       qParam !== null ||
-      prepParam !== undefined ||
-      cookParam !== undefined ||
+      totalTimeParam !== undefined ||
+      dietParam !== null ||
       difficultyParam !== null ||
       sortParam !== "relevance";
 
     return {
       searchTerm: qParam ?? persisted.searchTerm ?? "",
-      maxPrepTime: resolvedPrep,
-      maxCookTime: resolvedCook,
-      totalTime:
-        typeof resolvedPrep === "number" && typeof resolvedCook === "number"
-          ? resolvedPrep + resolvedCook
-          : persisted.totalTime,
+      totalTime: totalTimeParam ?? persisted.totalTime,
+      selectedDiet: dietParam ?? persisted.selectedDiet ?? null,
       selectedDifficulty: difficultyParam ?? persisted.selectedDifficulty ?? null,
       searchSort: sortParamRaw !== null ? sortParam : (persisted.searchSort ?? "relevance"),
       showSearchResults: hasAnyUrlFilter ? true : (persisted.showSearchResults ?? false),
@@ -219,9 +208,8 @@ function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [timeRanges, setTimeRanges] = useState<RecipeTimeRanges>(DEFAULT_TIME_RANGES);
-  const [maxPrepTime, setMaxPrepTime] = useState(initialHomeViewState.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime);
-  const [maxCookTime, setMaxCookTime] = useState(initialHomeViewState.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime);
-  const [totalTime, setTotalTime] = useState(initialHomeViewState.totalTime ?? (DEFAULT_TIME_RANGES.maxPrepTime + DEFAULT_TIME_RANGES.maxCookTime));
+  const [totalTime, setTotalTime] = useState(initialHomeViewState.totalTime ?? DEFAULT_TIME_RANGES.maxTotalTime);
+  const [selectedDiet, setSelectedDiet] = useState<SearchDietFilter | null>(initialHomeViewState.selectedDiet ?? null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyFilter | null>(initialHomeViewState.selectedDifficulty ?? null);
   const [searchSort, setSearchSort] = useState<SearchSort>(initialHomeViewState.searchSort ?? "relevance");
   const [displayedSearchCount, setDisplayedSearchCount] = useState(SEARCH_INITIAL_VISIBLE);
@@ -258,29 +246,16 @@ function Home() {
         setRecommendedRecipes(fetchedRecommendations);
 
         const nextRanges: RecipeTimeRanges = {
-          minPrepTime: Number(rangesData?.minPrepTime ?? 0),
-          maxPrepTime: Number(rangesData?.maxPrepTime ?? DEFAULT_TIME_RANGES.maxPrepTime),
-          minCookTime: Number(rangesData?.minCookTime ?? 0),
-          maxCookTime: Number(rangesData?.maxCookTime ?? DEFAULT_TIME_RANGES.maxCookTime),
+          minTotalTime: Number(rangesData?.minTotalTime ?? 0),
+          maxTotalTime: Number(rangesData?.maxTotalTime ?? DEFAULT_TIME_RANGES.maxTotalTime),
         };
 
         setTimeRanges(nextRanges);
 
-        const restoredMaxPrep = typeof initialHomeViewState.maxPrepTime === "number"
-          ? clamp(initialHomeViewState.maxPrepTime, nextRanges.minPrepTime, nextRanges.maxPrepTime)
-          : nextRanges.maxPrepTime;
-        const restoredMaxCook = typeof initialHomeViewState.maxCookTime === "number"
-          ? clamp(initialHomeViewState.maxCookTime, nextRanges.minCookTime, nextRanges.maxCookTime)
-          : nextRanges.maxCookTime;
-
-        const minTotal = nextRanges.minPrepTime + nextRanges.minCookTime;
-        const maxTotal = nextRanges.maxPrepTime + nextRanges.maxCookTime;
         const restoredTotal = typeof initialHomeViewState.totalTime === "number"
-          ? clamp(initialHomeViewState.totalTime, minTotal, maxTotal)
-          : restoredMaxPrep + restoredMaxCook;
+          ? clamp(initialHomeViewState.totalTime, nextRanges.minTotalTime, nextRanges.maxTotalTime)
+          : nextRanges.maxTotalTime;
 
-        setMaxPrepTime(restoredMaxPrep);
-        setMaxCookTime(restoredMaxCook);
         setTotalTime(restoredTotal);
       })
       .catch(() => {
@@ -289,31 +264,30 @@ function Home() {
         setRecommendedRecipes([]);
       })
       .finally(() => setLoading(false));
-  }, [initialHomeViewState.maxCookTime, initialHomeViewState.maxPrepTime, initialHomeViewState.totalTime]);
+  }, [initialHomeViewState.totalTime]);
 
   useEffect(() => {
     const viewState: HomeViewState = {
       searchTerm,
-      maxPrepTime,
-      maxCookTime,
       totalTime,
+      selectedDiet,
       selectedDifficulty,
       searchSort,
       showSearchResults,
     };
     sessionStorage.setItem(HOME_VIEW_STATE_KEY, JSON.stringify(viewState));
-  }, [searchTerm, maxPrepTime, maxCookTime, totalTime, selectedDifficulty, searchSort, showSearchResults]);
+  }, [searchTerm, totalTime, selectedDiet, selectedDifficulty, searchSort, showSearchResults]);
 
   useEffect(() => {
     const term = searchTerm.trim();
-    const prepFilterActive = maxPrepTime < timeRanges.maxPrepTime;
-    const cookFilterActive = maxCookTime < timeRanges.maxCookTime;
+    const totalTimeFilterActive = totalTime < timeRanges.maxTotalTime;
+    const dietFilterActive = selectedDiet !== null;
     const difficultyFilterActive = selectedDifficulty !== null;
 
     const nextParams = new URLSearchParams();
     if (term.length > 0) nextParams.set("q", term);
-    if (prepFilterActive) nextParams.set("maxPrepTime", String(maxPrepTime));
-    if (cookFilterActive) nextParams.set("maxCookTime", String(maxCookTime));
+    if (totalTimeFilterActive) nextParams.set("maxTotalTime", String(totalTime));
+    if (dietFilterActive && selectedDiet) nextParams.set("dietType", selectedDiet);
     if (difficultyFilterActive && selectedDifficulty) nextParams.set("difficulty", selectedDifficulty);
     if (searchSort !== "relevance") nextParams.set("sort", searchSort);
 
@@ -322,7 +296,7 @@ function Home() {
     if (currentQuery !== nextQuery) {
       setSearchParams(nextParams, { replace: true });
     }
-  }, [searchTerm, maxPrepTime, maxCookTime, selectedDifficulty, searchSort, timeRanges.maxPrepTime, timeRanges.maxCookTime, searchParams, setSearchParams]);
+  }, [searchTerm, totalTime, selectedDiet, selectedDifficulty, searchSort, timeRanges.maxTotalTime, searchParams, setSearchParams]);
 
   const handleResize = useCallback(() => {
     if (gridContainerRef.current) {
@@ -341,10 +315,10 @@ function Home() {
 
   const runSearch = useCallback(async () => {
     const term = searchTerm.trim();
-    const prepFilterActive = maxPrepTime < timeRanges.maxPrepTime;
-    const cookFilterActive = maxCookTime < timeRanges.maxCookTime;
+    const totalTimeFilterActive = totalTime < timeRanges.maxTotalTime;
+    const dietFilterActive = selectedDiet !== null;
     const difficultyFilterActive = selectedDifficulty !== null;
-    const hasActiveFilters = term.length > 0 || prepFilterActive || cookFilterActive || difficultyFilterActive;
+    const hasActiveFilters = term.length > 0 || totalTimeFilterActive || dietFilterActive || difficultyFilterActive;
     // Trigger search if: text entered OR any filter active OR search bar is focused
     if (!hasActiveFilters && !isSearchUiFocused) {
       setShowSearchResults(false);
@@ -355,9 +329,11 @@ function Home() {
 
     const params = new URLSearchParams();
     params.set("q", term);
-    params.set("maxPrepTime", String(maxPrepTime));
-    params.set("maxCookTime", String(maxCookTime));
+    params.set("maxTotalTime", String(totalTime));
     params.set("limit", String(SEARCH_FETCH_LIMIT));
+    if (selectedDiet) {
+      params.set("dietType", selectedDiet);
+    }
     if (selectedDifficulty) {
       params.set("difficulty", selectedDifficulty);
     }
@@ -382,7 +358,7 @@ function Home() {
     } finally {
       setIsSearching(false);
     }
-  }, [searchTerm, maxPrepTime, maxCookTime, selectedDifficulty, isSearchUiFocused, timeRanges.maxPrepTime, timeRanges.maxCookTime]);
+  }, [searchTerm, totalTime, selectedDiet, selectedDifficulty, isSearchUiFocused, timeRanges.maxTotalTime]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -391,63 +367,14 @@ function Home() {
     return () => window.clearTimeout(timer);
   }, [runSearch]);
 
-  const distributeTotalTime = useCallback((newTotalTime: number) => {
-    const nextTotal = clamp(
-      newTotalTime,
-      timeRanges.minPrepTime + timeRanges.minCookTime,
-      timeRanges.maxPrepTime + timeRanges.maxCookTime
-    );
-
-    const currentSum = maxPrepTime + maxCookTime;
-    const ratio = currentSum > 0 ? maxPrepTime / currentSum : 0.5;
-
-    let nextPrep = clamp(
-      Math.round(nextTotal * ratio),
-      timeRanges.minPrepTime,
-      timeRanges.maxPrepTime
-    );
-    let nextCook = clamp(
-      nextTotal - nextPrep,
-      timeRanges.minCookTime,
-      timeRanges.maxCookTime
-    );
-
-    const diff = nextTotal - (nextPrep + nextCook);
-    if (diff > 0) {
-      const cookRoom = timeRanges.maxCookTime - nextCook;
-      const addCook = Math.min(cookRoom, diff);
-      nextCook += addCook;
-      nextPrep = clamp(nextTotal - nextCook, timeRanges.minPrepTime, timeRanges.maxPrepTime);
-    }
-    if (diff < 0) {
-      const cookRemovable = nextCook - timeRanges.minCookTime;
-      const removeCook = Math.min(cookRemovable, Math.abs(diff));
-      nextCook -= removeCook;
-      nextPrep = clamp(nextTotal - nextCook, timeRanges.minPrepTime, timeRanges.maxPrepTime);
-    }
-
-    setMaxPrepTime(nextPrep);
-    setMaxCookTime(nextCook);
-    setTotalTime(nextPrep + nextCook);
-  }, [maxPrepTime, maxCookTime, timeRanges]);
-
-  const handlePrepTimeChange = (value: number) => {
-    const nextPrep = clamp(value, timeRanges.minPrepTime, timeRanges.maxPrepTime);
-    setMaxPrepTime(nextPrep);
-    setTotalTime(nextPrep + maxCookTime);
-  };
-
-  const handleCookTimeChange = (value: number) => {
-    const nextCook = clamp(value, timeRanges.minCookTime, timeRanges.maxCookTime);
-    setMaxCookTime(nextCook);
-    setTotalTime(maxPrepTime + nextCook);
-  };
+  const handleTotalTimeChange = useCallback((value: number) => {
+    setTotalTime(clamp(value, timeRanges.minTotalTime, timeRanges.maxTotalTime));
+  }, [timeRanges.maxTotalTime, timeRanges.minTotalTime]);
 
   const clearFilters = useCallback(() => {
     setSearchTerm("");
-    setMaxPrepTime(timeRanges.maxPrepTime);
-    setMaxCookTime(timeRanges.maxCookTime);
-    setTotalTime(timeRanges.maxPrepTime + timeRanges.maxCookTime);
+    setTotalTime(timeRanges.maxTotalTime);
+    setSelectedDiet(null);
     setSelectedDifficulty(null);
     setSearchResults([]);
     setDisplayedSearchCount(SEARCH_INITIAL_VISIBLE);
@@ -455,7 +382,7 @@ function Home() {
     setIsSearchUiFocused(false);
     setSearchParams(new URLSearchParams(), { replace: true });
     sessionStorage.removeItem(HOME_VIEW_STATE_KEY);
-  }, [timeRanges.maxPrepTime, timeRanges.maxCookTime, setSearchParams]);
+  }, [timeRanges.maxTotalTime, setSearchParams]);
 
   useEffect(() => {
     const shouldReset = Boolean((location.state as { resetHome?: boolean } | null)?.resetHome);
@@ -470,6 +397,10 @@ function Home() {
     setSelectedDifficulty((prev) => (prev === difficulty ? null : difficulty));
   };
 
+  const toggleDiet = (diet: SearchDietFilter) => {
+    setSelectedDiet((prev) => (prev === diet ? null : diet));
+  };
+
   const handleTagSectionClick = (tag: string) => {
     setSearchTerm(tag);
     setSelectedDifficulty(null);
@@ -479,6 +410,57 @@ function Home() {
   };
 
   const showExpandedSearchUi = isSearchUiFocused || showSearchResults;
+
+  const renderRecipeCard = (recipe: RecipeFromDB, key: string, transitionDuration = 0.4) => {
+    const dietBadge = getRecipeDietBadge(recipe.diet_type);
+    const totalRecipeTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0);
+
+    return (
+      <motion.div
+        key={key}
+        className="recipe-card"
+        onClick={() => navigate(`/recipes/${recipe.recipeid}`)}
+        whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: transitionDuration }}
+      >
+        <div className="recipe-card-img-wrap">
+          <img
+            src={recipe.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
+            alt={recipe.title}
+            className="recipe-card-img"
+            loading="lazy"
+            decoding="async"
+          />
+          {dietBadge && (
+            <span className={`recipe-card-badge recipe-card-diet-badge diet-badge ${dietBadge.className}`}>
+              {dietBadge.icon} {dietBadge.label}
+            </span>
+          )}
+          {!dietBadge && recipe.difficulty && (
+            <span className={`recipe-card-badge badge-${recipe.difficulty.toLowerCase()}`}>
+              {recipe.difficulty}
+            </span>
+          )}
+        </div>
+        <div className="recipe-card-body">
+          <h3 className="recipe-card-title">{recipe.title}</h3>
+          {recipe.description && (
+            <p className="recipe-card-desc">{recipe.description}</p>
+          )}
+          <div className="recipe-card-meta">
+            {totalRecipeTime > 0 && (
+              <span className="recipe-card-meta-item">⏱️ {totalRecipeTime} min</span>
+            )}
+            {recipe.servings != null && (
+              <span className="recipe-card-meta-item">🍽️ {recipe.servings} servings</span>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
 
   const sortedSearchResults = useMemo(() => {
     if (searchResults.length <= 1 || searchSort === "relevance") {
@@ -655,6 +637,23 @@ function Home() {
             style={{ overflow: "hidden", pointerEvents: showExpandedSearchUi ? "auto" : "none" }}
           >
             <div className="difficulty-filter-row">
+              <span className="difficulty-filter-label">Diet</span>
+              <div className="difficulty-chip-list">
+                {(["VEGETARIAN", "VEGAN"] as SearchDietFilter[]).map((diet) => (
+                  <button
+                    key={diet}
+                    type="button"
+                    className={`difficulty-chip ${selectedDiet === diet ? "difficulty-chip-active" : ""}`}
+                    onClick={() => toggleDiet(diet)}
+                    aria-pressed={selectedDiet === diet}
+                  >
+                    {diet === "VEGAN" ? "🌿 Vegan" : "🥬 Vegetarian"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="difficulty-filter-row">
               <span className="difficulty-filter-label">Difficulty</span>
               <div className="difficulty-chip-list">
                 {(["EASY", "MEDIUM", "HARD"] as DifficultyFilter[]).map((difficulty) => (
@@ -673,73 +672,32 @@ function Home() {
 
             <div className="time-input-group">
               <div className="time-input-head">
-                <label htmlFor="prep-time">Prep Time (max)</label>
-                <span>{timeRanges.minPrepTime} - {timeRanges.maxPrepTime} min</span>
+                <label htmlFor="total-time">Total Time (max)</label>
+                <span>{timeRanges.minTotalTime} - {timeRanges.maxTotalTime} min</span>
               </div>
               <div className="time-input-row">
                 <input
-                  id="prep-time"
+                  id="total-time"
                   className="time-input"
                   type="number"
-                  min={timeRanges.minPrepTime}
-                  max={timeRanges.maxPrepTime}
-                  value={maxPrepTime}
-                  onChange={(e) => handlePrepTimeChange(Number(e.target.value))}
+                  min={timeRanges.minTotalTime}
+                  max={timeRanges.maxTotalTime}
+                  value={totalTime}
+                  onChange={(e) => handleTotalTimeChange(Number(e.target.value))}
                 />
                 <input
                   className="time-slider"
                   type="range"
-                  min={timeRanges.minPrepTime}
-                  max={timeRanges.maxPrepTime}
-                  value={maxPrepTime}
-                  onChange={(e) => handlePrepTimeChange(Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="time-input-group">
-              <div className="time-input-head">
-                <label htmlFor="cook-time">Cook Time (max)</label>
-                <span>{timeRanges.minCookTime} - {timeRanges.maxCookTime} min</span>
-              </div>
-              <div className="time-input-row">
-                <input
-                  id="cook-time"
-                  className="time-input"
-                  type="number"
-                  min={timeRanges.minCookTime}
-                  max={timeRanges.maxCookTime}
-                  value={maxCookTime}
-                  onChange={(e) => handleCookTimeChange(Number(e.target.value))}
-                />
-                <input
-                  className="time-slider"
-                  type="range"
-                  min={timeRanges.minCookTime}
-                  max={timeRanges.maxCookTime}
-                  value={maxCookTime}
-                  onChange={(e) => handleCookTimeChange(Number(e.target.value))}
+                  min={timeRanges.minTotalTime}
+                  max={timeRanges.maxTotalTime}
+                  value={totalTime}
+                  onChange={(e) => handleTotalTimeChange(Number(e.target.value))}
                 />
               </div>
             </div>
 
             <div className="time-input-group total-time-group">
-              <div className="time-input-head">
-                <label htmlFor="total-time">Total Time (prep + cook)</label>
-                <span>
-                  {timeRanges.minPrepTime + timeRanges.minCookTime} - {timeRanges.maxPrepTime + timeRanges.maxCookTime} min
-                </span>
-              </div>
               <div className="time-input-row total-row">
-                <input
-                  id="total-time"
-                  className="time-input"
-                  type="number"
-                  min={timeRanges.minPrepTime + timeRanges.minCookTime}
-                  max={timeRanges.maxPrepTime + timeRanges.maxCookTime}
-                  value={totalTime}
-                  onChange={(e) => distributeTotalTime(Number(e.target.value))}
-                />
                 <button className="hero-search-btn filter-clear-btn" onClick={clearFilters}>Clear</button>
               </div>
             </div>
@@ -789,46 +747,62 @@ function Home() {
       {/* ===== RECIPE SECTIONS ===== */}
       <div className={`carousel-section ${showSearchResults ? "carousel-section-hidden" : ""}`}>
         <Carousel>
-          {carouselRecipes.map((r, index) => (
-            <motion.div
-              key={r.recipeid}
-              whileHover={{ scale: 1.05, boxShadow: "0 8px 32px #fff2" }}
-              initial={{ opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              style={{ minWidth: 260, maxWidth: 260, height: 320, position: "relative", borderRadius: 16, overflow: "hidden", margin: "0 0", background: "#222", display: "flex", alignItems: "flex-end", justifyContent: "center", touchAction: "pan-y", cursor: "pointer" }}
-              onMouseDown={(e) => {
-                (e.currentTarget as any).__holdStartTime = Date.now();
-              }}
-              onClick={(e) => {
-                // Check if mouse was held for more than 200ms
-                const holdTime = Date.now() - ((e.currentTarget as any).__holdStartTime || 0);
-                if (holdTime < 200) {
-                  void trackRecipeClick(r.recipeid);
-                  navigate(`/recipes/${r.recipeid}`);
-                }
-              }}
-            >
-              <img
-                src={r.image_url || DEFAULT_CAROUSEL_IMAGE}
-                alt={r.title}
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
-                draggable={false}
-                loading={index < 5 ? "eager" : "lazy"}
-                fetchPriority={index < 3 ? "high" : "auto"}
-                decoding="async"
-              />
-              <div style={{ position: "absolute", top: 0, left: 0, width: "100%", padding: "8px", display: "flex", flexWrap: "wrap", gap: "4px", pointerEvents: "none" }}>
-                {r.difficulty && (
-                  <span style={{ background: r.difficulty === "EASY" ? "#4ade80" : r.difficulty === "MEDIUM" ? "#fbbf24" : "#f87171", color: "#000", fontSize: "11px", fontWeight: "bold", padding: "2px 6px", borderRadius: "4px", textTransform: "uppercase" }}>{r.difficulty}</span>
-                )}
-                {r.tags && r.tags.slice(0, 2).map((tag) => (
-                  <span key={tag} style={{ background: "#333", color: "#fff", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}>{tag}</span>
-                ))}
-              </div>
-              <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "monospace", fontWeight: 600, fontSize: 20, padding: "12px 0", textAlign: "center", pointerEvents: "none" }}>{r.title}</div>
-            </motion.div>
-          ))}
+          {carouselRecipes.map((r, index) => {
+            const dietBadge = getRecipeDietBadge(r.diet_type);
+            return (
+              <motion.div
+                key={r.recipeid}
+                whileHover={{ scale: 1.05, boxShadow: "0 8px 32px #fff2" }}
+                initial={{ opacity: 0, y: 40 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                style={{ minWidth: 260, maxWidth: 260, height: 320, position: "relative", borderRadius: 16, overflow: "hidden", margin: "0 0", background: "#222", display: "flex", alignItems: "flex-end", justifyContent: "center", touchAction: "pan-y", cursor: "pointer" }}
+                onMouseDown={(e) => {
+                  (e.currentTarget as any).__holdStartTime = Date.now();
+                }}
+                onClick={(e) => {
+                  const holdTime = Date.now() - ((e.currentTarget as any).__holdStartTime || 0);
+                  if (holdTime < 200) {
+                    void trackRecipeClick(r.recipeid);
+                    navigate(`/recipes/${r.recipeid}`);
+                  }
+                }}
+              >
+                <img
+                  src={r.image_url || DEFAULT_CAROUSEL_IMAGE}
+                  alt={r.title}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
+                  draggable={false}
+                  loading={index < 5 ? "eager" : "lazy"}
+                  fetchPriority={index < 3 ? "high" : "auto"}
+                  decoding="async"
+                />
+                <div style={{ position: "absolute", top: 0, left: 0, width: "100%", padding: "8px", display: "flex", flexWrap: "wrap", gap: "4px", pointerEvents: "none" }}>
+                  {dietBadge ? (
+                    <span
+                      style={{
+                        background: dietBadge.bg,
+                        color: dietBadge.color,
+                        fontSize: "10px",
+                        fontWeight: 700,
+                        padding: "2px 6px",
+                        borderRadius: "999px",
+                      }}
+                    >
+                      {dietBadge.icon} {dietBadge.label}
+                    </span>
+                  ) : null}
+                  {r.difficulty && (
+                    <span style={{ background: r.difficulty === "EASY" ? "#4ade80" : r.difficulty === "MEDIUM" ? "#fbbf24" : "#f87171", color: "#000", fontSize: "11px", fontWeight: "bold", padding: "2px 6px", borderRadius: "4px", textTransform: "uppercase" }}>{r.difficulty}</span>
+                  )}
+                  {r.tags && r.tags.slice(0, 2).map((tag) => (
+                    <span key={tag} style={{ background: "#333", color: "#fff", fontSize: "10px", padding: "2px 6px", borderRadius: "4px" }}>{tag}</span>
+                  ))}
+                </div>
+                <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", background: "rgba(0,0,0,0.6)", color: "#fff", fontFamily: "monospace", fontWeight: 600, fontSize: 20, padding: "12px 0", textAlign: "center", pointerEvents: "none" }}>{r.title}</div>
+              </motion.div>
+            );
+          })}
         </Carousel>
       </div>
 
@@ -870,49 +844,7 @@ function Home() {
           ) : (
             <>
               <div className="recipe-grid">
-                {visibleSearchRecipes.map(r => (
-                  <motion.div
-                    key={r.recipeid}
-                    className="recipe-card"
-                    onClick={() => navigate(`/recipes/${r.recipeid}`)}
-                    whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.4 }}
-                  >
-                    <div className="recipe-card-img-wrap">
-                      <img
-                        src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
-                        alt={r.title}
-                        className="recipe-card-img"
-                        loading="lazy"
-                        decoding="async"
-                      />
-                      {r.difficulty && (
-                        <span className={`recipe-card-badge badge-${r.difficulty.toLowerCase()}`}>
-                          {r.difficulty}
-                        </span>
-                      )}
-                    </div>
-                    <div className="recipe-card-body">
-                      <h3 className="recipe-card-title">{r.title}</h3>
-                      {r.description && (
-                        <p className="recipe-card-desc">{r.description}</p>
-                      )}
-                      <div className="recipe-card-meta">
-                        {r.proptimemin != null && (
-                          <span className="recipe-card-meta-item">🥣 Prep {r.proptimemin} min</span>
-                        )}
-                        {r.cooktimemin != null && (
-                          <span className="recipe-card-meta-item">🕐 {r.cooktimemin} min</span>
-                        )}
-                        {r.servings != null && (
-                          <span className="recipe-card-meta-item">🍽️ {r.servings} servings</span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                {visibleSearchRecipes.map((r) => renderRecipeCard(r, r.recipeid))}
               </div>
               {visibleSearchRecipes.length < searchResults.length && (
                 <div
@@ -950,49 +882,7 @@ function Home() {
                   </span>
                 </button>
                 <div className="recipe-grid">
-                  {section.recipes.map((r) => (
-                    <motion.div
-                      key={`${section.tag}-${r.recipeid}`}
-                      className="recipe-card"
-                      onClick={() => navigate(`/recipes/${r.recipeid}`)}
-                      whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-                      initial={{ opacity: 0, y: 30 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.35 }}
-                    >
-                      <div className="recipe-card-img-wrap">
-                        <img
-                          src={r.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
-                          alt={r.title}
-                          className="recipe-card-img"
-                          loading="lazy"
-                          decoding="async"
-                        />
-                        {r.difficulty && (
-                          <span className={`recipe-card-badge badge-${r.difficulty.toLowerCase()}`}>
-                            {r.difficulty}
-                          </span>
-                        )}
-                      </div>
-                      <div className="recipe-card-body">
-                        <h3 className="recipe-card-title">{r.title}</h3>
-                        {r.description && (
-                          <p className="recipe-card-desc">{r.description}</p>
-                        )}
-                        <div className="recipe-card-meta">
-                          {r.proptimemin != null && (
-                            <span className="recipe-card-meta-item">🥣 Prep {r.proptimemin} min</span>
-                          )}
-                          {r.cooktimemin != null && (
-                            <span className="recipe-card-meta-item">🕐 {r.cooktimemin} min</span>
-                          )}
-                          {r.servings != null && (
-                            <span className="recipe-card-meta-item">🍽️ {r.servings} servings</span>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                  {section.recipes.map((r) => renderRecipeCard(r, `${section.tag}-${r.recipeid}`, 0.35))}
                 </div>
               </div>
             ))}

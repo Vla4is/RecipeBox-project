@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
+import { getRecipeDietBadge } from "./recipeDiet";
 import "./App.css";
 
 type Recipe = {
@@ -10,6 +11,7 @@ type Recipe = {
   image_url: string | null;
   proptimemin: number | null;
   cooktimemin: number | null;
+  diet_type: string | null;
   servings: number | null;
   difficulty: string | null;
 };
@@ -310,6 +312,7 @@ export default function RecipeDetails() {
 
   const { recipe, ingredients, steps, tags } = data;
   const diff = difficultyColor(recipe.difficulty);
+  const dietBadge = getRecipeDietBadge(recipe.diet_type);
   const totalTime =
     (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0) || null;
 
@@ -398,6 +401,15 @@ export default function RecipeDetails() {
               <div className="rd-pill">
                 <span className="rd-pill-icon">🍽️</span>
                 <div><strong>{recipe.servings}</strong><br /><small>Servings</small></div>
+              </div>
+            )}
+            {dietBadge && (
+              <div
+                className="rd-pill"
+                style={{ background: dietBadge.bg, borderColor: dietBadge.color + "44" }}
+              >
+                <span className="rd-pill-icon">{dietBadge.icon}</span>
+                <div style={{ color: dietBadge.color }}><strong>{dietBadge.label}</strong><br /><small>Diet</small></div>
               </div>
             )}
             {recipe.difficulty && (

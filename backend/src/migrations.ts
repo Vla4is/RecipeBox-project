@@ -41,6 +41,15 @@ async function createTables() {
       console.log('Created visibility_enum type');
     }
 
+    if (await typeExists('recipe_diet_enum')) {
+      console.log('recipe_diet_enum type already exists');
+    } else {
+      await pool.query(`
+        CREATE TYPE recipe_diet_enum AS ENUM ('NONE', 'VEGETARIAN', 'VEGAN');
+      `);
+      console.log('Created recipe_diet_enum type');
+    }
+
     if (await typeExists('unit_enum')) {
       console.log('unit_enum type already exists');
     } else {
@@ -118,6 +127,30 @@ async function createTables() {
         await pool.query(`ALTER TABLE recipes ADD COLUMN userid UUID REFERENCES users(userid) ON DELETE SET NULL`);
         console.log('Added userid column to recipes table');
       }
+      const totalTimeCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'totaltimemin'`
+      );
+      if (totalTimeCheck.rows.length === 0) {
+        await pool.query(`
+          ALTER TABLE recipes
+          ADD COLUMN totaltimemin INT GENERATED ALWAYS AS (
+            COALESCE(proptimemin, 0) + COALESCE(cooktimemin, 0)
+          ) STORED
+        `);
+        console.log('Added totaltimemin generated column to recipes table');
+      }
+      const dietTypeCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'diet_type'`
+      );
+      if (dietTypeCheck.rows.length === 0) {
+        await pool.query(`
+          ALTER TABLE recipes
+          ADD COLUMN diet_type recipe_diet_enum NOT NULL DEFAULT 'NONE'
+        `);
+        console.log('Added diet_type column to recipes table');
+      }
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_recipes_totaltimemin ON recipes(totaltimemin)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_recipes_diet_type ON recipes(diet_type)`);
     } else {
       await pool.query(`
         CREATE TABLE recipes (
@@ -128,6 +161,10 @@ async function createTables() {
           image_url TEXT,
           propTimeMin INT,
           cookTimeMin INT,
+          totalTimeMin INT GENERATED ALWAYS AS (
+            COALESCE(propTimeMin, 0) + COALESCE(cookTimeMin, 0)
+          ) STORED,
+          diet_type recipe_diet_enum NOT NULL DEFAULT 'NONE',
           servings INT,
           difficulty difficulty_enum,
           visibility visibility_enum,
@@ -138,6 +175,8 @@ async function createTables() {
       await pool.query(`CREATE INDEX idx_recipes_title_trgm ON recipes USING GIN (title gin_trgm_ops)`);
       await pool.query(`CREATE INDEX idx_recipes_description_trgm ON recipes USING GIN (description gin_trgm_ops)`);
       await pool.query(`CREATE INDEX idx_recipes_visibility_user ON recipes(visibility, userid)`);
+      await pool.query(`CREATE INDEX idx_recipes_totaltimemin ON recipes(totaltimemin)`);
+      await pool.query(`CREATE INDEX idx_recipes_diet_type ON recipes(diet_type)`);
       console.log('Recipes table created successfully');
     }
 

@@ -22,6 +22,7 @@ import {
   getHomeTagSections,
   getRecipeRatingSummary,
   setRecipeRating,
+  normalizeRecipeDietType,
 } from "./services/recipeService";
 import { searchRecipes } from "./services/recipeSearchService";
 import {
@@ -186,13 +187,13 @@ app.get("/api/recipes/search", async (req: Request, res: Response) => {
     const user = getOptionalUser(req);
     const rawQuery = req.query.q;
     const q = (Array.isArray(rawQuery) ? rawQuery[0] : rawQuery) || "";
-    const rawMaxPrep = req.query.maxPrepTime;
-    const rawMaxCook = req.query.maxCookTime;
+    const rawMaxTotal = req.query.maxTotalTime;
+    const rawDietType = req.query.dietType;
     const rawDifficulty = req.query.difficulty;
     const rawLimit = req.query.limit;
 
-    const parsedMaxPrep = Number(Array.isArray(rawMaxPrep) ? rawMaxPrep[0] : rawMaxPrep);
-    const parsedMaxCook = Number(Array.isArray(rawMaxCook) ? rawMaxCook[0] : rawMaxCook);
+    const parsedMaxTotal = Number(Array.isArray(rawMaxTotal) ? rawMaxTotal[0] : rawMaxTotal);
+    const parsedDietType = normalizeRecipeDietType(Array.isArray(rawDietType) ? rawDietType[0] : rawDietType);
     const parsedLimit = Number(Array.isArray(rawLimit) ? rawLimit[0] : rawLimit);
     const parsedDifficulties = (Array.isArray(rawDifficulty) ? rawDifficulty : [rawDifficulty])
       .filter((v): v is string => typeof v === "string")
@@ -202,8 +203,8 @@ app.get("/api/recipes/search", async (req: Request, res: Response) => {
     const recipes = await searchRecipes({
       searchTerm: String(q),
       userid: user?.userid,
-      maxPrepTime: Number.isFinite(parsedMaxPrep) ? parsedMaxPrep : undefined,
-      maxCookTime: Number.isFinite(parsedMaxCook) ? parsedMaxCook : undefined,
+      maxTotalTime: Number.isFinite(parsedMaxTotal) ? parsedMaxTotal : undefined,
+      dietType: parsedDietType === "NONE" ? undefined : parsedDietType,
       difficulties: parsedDifficulties,
       limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
     });
@@ -378,7 +379,7 @@ app.get("/api/recommendations/home", async (req: Request, res: Response) => {
 // Create a new recipe (authenticated)
 app.post("/api/recipes", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, image_url, prepTimeMin, cookTimeMin, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
+    const { title, description, image_url, prepTimeMin, cookTimeMin, dietType, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       return res.status(400).json({ error: "title is required" });
     }
@@ -389,6 +390,7 @@ app.post("/api/recipes", requireAuth, async (req: AuthRequest, res: Response) =>
       image_url: image_url || undefined,
       prepTimeMin: prepTimeMin ? Number(prepTimeMin) : undefined,
       cookTimeMin: cookTimeMin ? Number(cookTimeMin) : undefined,
+      dietType: normalizeRecipeDietType(dietType),
       servings: servings ? Number(servings) : undefined,
       difficulty: difficulty || undefined,
       visibility: visibility || "PUBLIC",
@@ -484,7 +486,7 @@ app.get("/api/my-recipes/:recipeId", requireAuth, async (req: AuthRequest, res: 
 app.put("/api/recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const recipeId = req.params.recipeId as string;
-    const { title, description, image_url, prepTimeMin, cookTimeMin, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
+    const { title, description, image_url, prepTimeMin, cookTimeMin, dietType, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       return res.status(400).json({ error: "title is required" });
     }
@@ -494,6 +496,7 @@ app.put("/api/recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Res
       image_url: image_url || undefined,
       prepTimeMin: prepTimeMin ? Number(prepTimeMin) : undefined,
       cookTimeMin: cookTimeMin ? Number(cookTimeMin) : undefined,
+      dietType: normalizeRecipeDietType(dietType),
       servings: servings ? Number(servings) : undefined,
       difficulty: difficulty || undefined,
       visibility: visibility || "PUBLIC",

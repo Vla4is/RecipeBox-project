@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { getRecipeDietBadge } from "./recipeDiet";
 import "./App.css";
 
 interface RecipeRow {
@@ -10,6 +11,7 @@ interface RecipeRow {
   image_url: string | null;
   proptimemin: number | null;
   cooktimemin: number | null;
+  diet_type: string | null;
   servings: number | null;
   difficulty: string | null;
   visibility: string | null;
@@ -210,6 +212,7 @@ export default function MyRecipes({ token, onUnauthorized }: { token: string; on
           >
             {activeRecipes.map((recipe) => {
               const diff = diffBadge(recipe.difficulty);
+              const dietBadge = getRecipeDietBadge(recipe.diet_type);
               const totalTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0) || null;
               return (
                 <motion.div
@@ -228,6 +231,14 @@ export default function MyRecipes({ token, onUnauthorized }: { token: string; on
                       className="my-recipe-card-img"
                     />
                     <div className="my-recipe-card-badges">
+                      {dietBadge && (
+                        <span
+                          className={`my-recipe-badge diet-badge ${dietBadge.className}`}
+                          style={{ background: dietBadge.bg, color: dietBadge.color }}
+                        >
+                          {dietBadge.icon} {dietBadge.label}
+                        </span>
+                      )}
                       <span
                         className="my-recipe-badge"
                         style={{ background: diff.bg, color: diff.color }}
