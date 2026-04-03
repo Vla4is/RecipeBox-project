@@ -111,6 +111,12 @@ PORT=3000
 VITE_API_URL=http://localhost:3000
 ```
 
+## XML Cookbook
+
+Open `http://localhost:3000/cookbook.xml` to view the printable cookbook generated from public recipes.
+The XML is transformed in the browser using XSLT from `backend/public/cookbook.xsl`, with print styling in `backend/public/cookbook.css`.
+Use `http://localhost:3000/cookbook.xml?limit=10` to render a smaller cookbook while testing.
+
 ## License
 
 ISC

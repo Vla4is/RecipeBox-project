@@ -1,8 +1,10 @@
 
 import express, { Request, Response, NextFunction } from "express";
+import path from "path";
 import jwt from "jsonwebtoken";
 import initializeDatabase from "./db-init";
 import pool from "./database";
+import { buildCookbookXml, getCookbookRecipes } from "./services/cookbookService";
 import { createUser, authenticateUser } from "./services/userService";
 import {
   getPublicRecipes,
@@ -44,6 +46,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: "10mb" }));
+app.use("/cookbook-assets", express.static(path.resolve(__dirname, "../public")));
 
 // JWT auth middleware
 interface AuthRequest extends Request {
@@ -102,6 +105,21 @@ app.get("/", (_req: Request, res: Response) => {
 
 app.get("/api/hello", (_req: Request, res: Response) => {
   res.json({ message: "Bro Hello from the backend!" });
+});
+
+app.get("/cookbook.xml", async (req: Request, res: Response) => {
+  try {
+    const rawLimit = req.query.limit;
+    const parsedLimit = Number(Array.isArray(rawLimit) ? rawLimit[0] : rawLimit);
+    const recipes = await getCookbookRecipes(Number.isFinite(parsedLimit) ? parsedLimit : undefined);
+    const xml = buildCookbookXml(recipes);
+
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    return res.send(xml);
+  } catch (err) {
+    console.error("Error generating cookbook XML:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 app.post("/api/admin/reseed-recipes", async (_req: Request, res: Response) => {
