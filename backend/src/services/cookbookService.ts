@@ -6,6 +6,7 @@ export interface CookbookRecipeEntry {
   totalRatings: number;
 }
 
+
 export async function getCookbookRecipes(limit?: number): Promise<CookbookRecipeEntry[]> {
   const recipes = await getPublicRecipes();
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.floor(limit as number)) : recipes.length;

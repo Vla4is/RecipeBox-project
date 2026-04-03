@@ -139,6 +139,7 @@ app.post("/api/admin/reseed-recipes", async (_req: Request, res: Response) => {
   }
 });
 
+
 app.get("/api/recipes", async (_req: Request, res: Response) => {
   try {
     const recipes = await getPublicRecipes();

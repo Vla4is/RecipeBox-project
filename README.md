@@ -35,7 +35,6 @@ DB_NAME=your_db
 AUTO_SEED_RECIPES=true
 NODE_ENV=development
 
-
 ```
 - Disable auto seed after the first run or if you dont want dummy data
 
