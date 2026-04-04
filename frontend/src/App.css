@@ -922,7 +922,12 @@
     height: 180px;
   }
   .recipe-card-desc {
-    display: block;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 12px;
+    line-height: 1.4;
   }
 }
 
