@@ -1,6 +1,27 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import "./App.css";
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.04,
+      delayChildren: 0.03,
+    },
+  },
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 18 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.24, ease: "easeOut" as const },
+  },
+};
 
 export default function RegistrationForm() {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
@@ -37,15 +58,39 @@ export default function RegistrationForm() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-header">
+    <motion.div
+      className="auth-page"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.22, ease: "easeOut" }}
+    >
+      <motion.div
+        className="auth-card"
+        initial={{ opacity: 0, y: 24, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.32, ease: "easeOut" }}
+        whileHover={{ y: -4, boxShadow: "0 24px 72px rgba(0, 0, 0, 0.38)" }}
+      >
+        <motion.div
+          className="auth-header"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <div className="auth-logo">🍽️</div>
-          <h2 className="auth-title">Join Our Community</h2>
-          <p className="auth-subtitle">Start sharing your recipes with thousands of home cooks</p>
-        </div>
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="auth-field">
+          <motion.h2 className="auth-title" variants={itemVariants}>Join Our Community</motion.h2>
+          <motion.p className="auth-subtitle" variants={itemVariants}>
+            Start sharing your recipes with thousands of home cooks
+          </motion.p>
+        </motion.div>
+        <motion.form
+          onSubmit={handleSubmit}
+          className="auth-form"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className="auth-field" variants={itemVariants}>
             <label className="auth-label" htmlFor="reg-name">Name</label>
             <input
               id="reg-name"
@@ -56,8 +101,8 @@ export default function RegistrationForm() {
               required
               className="auth-input"
             />
-          </div>
-          <div className="auth-field">
+          </motion.div>
+          <motion.div className="auth-field" variants={itemVariants}>
             <label className="auth-label" htmlFor="reg-email">Email</label>
             <input
               id="reg-email"
@@ -69,8 +114,8 @@ export default function RegistrationForm() {
               required
               className="auth-input"
             />
-          </div>
-          <div className="auth-field">
+          </motion.div>
+          <motion.div className="auth-field" variants={itemVariants}>
             <label className="auth-label" htmlFor="reg-password">Password</label>
             <input
               id="reg-password"
@@ -83,17 +128,24 @@ export default function RegistrationForm() {
               minLength={6}
               className="auth-input"
             />
-          </div>
-          <button type="submit" disabled={loading} className="auth-btn">
+          </motion.div>
+          <motion.button
+            type="submit"
+            disabled={loading}
+            className="auth-btn"
+            variants={itemVariants}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.985 }}
+          >
             {loading ? "Creating Account..." : "Create Account"}
-          </button>
-          {error && <div className="auth-error">{error}</div>}
-          {success && <div className="auth-success">{success}</div>}
-        </form>
-        <div className="auth-footer">
+          </motion.button>
+          {error && <motion.div className="auth-error" variants={itemVariants}>{error}</motion.div>}
+          {success && <motion.div className="auth-success" variants={itemVariants}>{success}</motion.div>}
+        </motion.form>
+        <motion.div className="auth-footer" variants={itemVariants} initial="hidden" animate="visible">
           Already have an account? <Link to="/login">Sign in</Link>
-        </div>
-      </div>
-    </div>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }

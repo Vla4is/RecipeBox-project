@@ -811,13 +811,15 @@ function Home() {
       </div>
 
       {/* Compact feed: search results or curated tag sections */}
-      <div style={{ width: "100%", padding: "16px 0 0" }}>
-        <h2 className="section-heading">{showSearchResults ? "Matching Recipes" : "Top Picks by Category"}</h2>
-        <p className="section-subheading">
-          {showSearchResults
-            ? "Same style, filtered instantly as you type"
-            : "Curated from the most popular recipes to keep the page fast and focused"}
-        </p>
+      <div className="home-section-intro">
+        <div className="home-section-heading-wrap">
+          <h2 className="section-heading">{showSearchResults ? "Matching Recipes" : "Top Picks by Category"}</h2>
+          <p className="section-subheading">
+            {showSearchResults
+              ? "Same style, filtered instantly as you type"
+              : "Curated from the most popular recipes to keep the page fast and focused"}
+          </p>
+        </div>
         {showSearchResults && (
           <div className="search-results-toolbar">
             <span className="search-results-count">
@@ -862,26 +864,16 @@ function Home() {
         ) : visibleHomeSections.length === 0 ? (
           <p className="recipe-grid-loading">No featured categories available right now</p>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+          <div className="home-category-sections">
             {visibleHomeSections.map((section) => (
-              <div key={section.tag}>
+              <div key={section.tag} className="home-category-section">
                 <button
                   type="button"
                   onClick={() => handleTagSectionClick(section.tag)}
-                  style={{
-                    border: "none",
-                    background: "none",
-                    padding: 0,
-                    marginBottom: 12,
-                    cursor: "pointer",
-                    textTransform: "capitalize",
-                    fontSize: 24,
-                    fontWeight: 700,
-                    color: "#1f2937",
-                  }}
+                  className="home-category-button"
                 >
                   #{section.tag}
-                  <span style={{ marginLeft: 10, fontSize: 14, fontWeight: 500, color: "#6b7280" }}>
+                  <span className="home-category-count">
                     {section.totalRecipes} recipes
                   </span>
                 </button>
