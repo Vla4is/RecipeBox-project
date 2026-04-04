@@ -433,12 +433,7 @@ function Home() {
             loading="lazy"
             decoding="async"
           />
-          {dietBadge && (
-            <span className={`recipe-card-badge recipe-card-diet-badge diet-badge ${dietBadge.className}`}>
-              {dietBadge.icon} {dietBadge.label}
-            </span>
-          )}
-          {!dietBadge && recipe.difficulty && (
+          {recipe.difficulty && (
             <span className={`recipe-card-badge badge-${recipe.difficulty.toLowerCase()}`}>
               {recipe.difficulty}
             </span>
@@ -455,6 +450,15 @@ function Home() {
             )}
             {recipe.servings != null && (
               <span className="recipe-card-meta-item">🍽️ {recipe.servings} servings</span>
+            )}
+            {dietBadge && (
+              <span
+                className={`recipe-card-meta-item recipe-card-diet-meta ${dietBadge.className}`}
+                title={dietBadge.label}
+                aria-label={dietBadge.label}
+              >
+                {dietBadge.icon}
+              </span>
             )}
           </div>
         </div>
