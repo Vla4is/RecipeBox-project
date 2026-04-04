@@ -435,11 +435,11 @@ async function createTables() {
       console.log('Shopping item table created successfully');
     }
 
-    const shouldAutoSeedRecipes = (process.env.AUTO_SEED_RECIPES || "false").toLowerCase() === "true";
+    const shouldAutoSeedRecipes = (process.env.AUTO_SEED_RECIPES || "true").toLowerCase() !== "false";
     if (shouldAutoSeedRecipes) {
       await seedRecipes(pool);
     } else {
-      console.log("Skipping auto recipe seed (AUTO_SEED_RECIPES is not 'true')");
+      console.log("Skipping auto recipe seed (AUTO_SEED_RECIPES is explicitly set to 'false')");
     }
   } catch (error) {
     console.error('Error creating tables:', error);
