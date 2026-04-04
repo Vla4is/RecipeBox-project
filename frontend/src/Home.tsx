@@ -749,6 +749,15 @@ function Home() {
       </header>
 
       {/* ===== RECIPE SECTIONS ===== */}
+      {!showSearchResults && (
+        <div className="home-carousel-intro">
+          <span className="home-carousel-kicker">Recommended For You</span>
+          <h2 className="home-carousel-title">Fresh picks to explore before you browse by category</h2>
+          <p className="home-carousel-subtitle">
+            A quick sweep of popular and relevant recipes, surfaced to feel inspiring without slowing the page down.
+          </p>
+        </div>
+      )}
       <div className={`carousel-section ${showSearchResults ? "carousel-section-hidden" : ""}`}>
         <Carousel>
           {carouselRecipes.map((r, index) => {
