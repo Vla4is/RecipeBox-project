@@ -2075,36 +2075,36 @@
 
 .rd-video-shell {
   width: min(1180px, calc(100% - 32px));
-  margin: -28px auto 24px;
+  margin: -28px auto 0;
   position: relative;
   z-index: 2;
+  border-radius: 24px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255,255,255) 0%, rgba(255,248,233) 100%);
+  box-shadow: 0 24px 50px rgba(32, 24, 8, 0.14);
 }
 
 .rd-video-toggle {
   width: 100%;
   border: 0;
-  border-radius: 24px;
+  border-radius: 0;
   padding: 20px 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(255,248,233,0.98) 100%);
-  box-shadow: 0 24px 50px rgba(32, 24, 8, 0.14);
+  background: transparent;
   cursor: pointer;
   text-align: left;
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  transition: transform 0.22s ease, background 0.22s ease;
 }
 
 .rd-video-toggle:hover {
   transform: translateY(-2px);
-  box-shadow: 0 28px 58px rgba(32, 24, 8, 0.18);
+  background: rgba(255,255,255,0.18);
 }
 
-.rd-video-toggle-open {
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 16px;
-}
+
 
 .rd-video-toggle-main {
   display: flex;
@@ -2172,10 +2172,7 @@
 
 .rd-video-panel {
   overflow: hidden;
-  background: #fffaf0;
-  border-bottom-left-radius: 24px;
-  border-bottom-right-radius: 24px;
-  box-shadow: 0 24px 50px rgba(32, 24, 8, 0.14);
+  background: rgba(255,250,240,0.88);
 }
 
 .rd-video-frame {
@@ -2454,7 +2451,7 @@
   grid-template-columns: 340px 1fr;
   gap: 28px;
   width: min(1200px, calc(100% - 48px));
-  margin: -36px auto 0;
+  margin: 28px auto 0;
   position: relative;
   z-index: 2;
 }
@@ -2605,7 +2602,7 @@
 @media (max-width: 900px) {
   .rd-body {
     grid-template-columns: 1fr;
-    margin-top: -24px;
+    margin-top: 24px;
   }
   .rd-ingredients-card {
     position: static;
@@ -2621,17 +2618,16 @@
   .rd-pills { gap: 8px; }
   .rd-pill { padding: 8px 12px; border-radius: 10px; }
   .rd-pill strong { font-size: 15px; }
-  .rd-body { width: calc(100% - 24px); gap: 16px; }
+  .rd-body { width: calc(100% - 24px); gap: 16px; margin-top: 16px; }
   .rd-card { padding: 24px 20px; border-radius: 16px; }
   .rd-card-heading { font-size: 20px; }
   .rd-step { gap: 12px; }
   .rd-step-badge { width: 32px; height: 32px; font-size: 14px; border-radius: 10px; }
   .rd-video-shell { width: calc(100% - 24px); margin-top: -22px; }
-  .rd-video-toggle { padding: 16px; border-radius: 18px; }
+  .rd-video-toggle { padding: 16px; }
   .rd-video-toggle-main { align-items: flex-start; }
   .rd-video-play { width: 46px; height: 46px; font-size: 17px; }
   .rd-video-title { font-size: 20px; }
-  .rd-video-panel { border-bottom-left-radius: 18px; border-bottom-right-radius: 18px; }
   .rd-video-frame { padding: 0 12px 12px; }
 }
 

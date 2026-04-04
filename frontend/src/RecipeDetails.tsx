@@ -500,7 +500,7 @@ export default function RecipeDetails() {
         >
           <button
             type="button"
-            className={`rd-video-toggle ${isVideoOpen ? "rd-video-toggle-open" : ""}`}
+            className={`rd-video-toggle`}
             onClick={() => setIsVideoOpen((prev) => !prev)}
             aria-expanded={isVideoOpen}
             aria-controls="recipe-video-panel"
