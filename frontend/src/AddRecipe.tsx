@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { convertImageFileToWebp } from "./imageUpload";
 import { normalizeRecipeDietType } from "./recipeDiet";
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from "./youtube";
 import "./App.css";
@@ -116,17 +117,16 @@ export default function AddRecipe({ token, onUnauthorized }: { token: string; on
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      setImagePreview(dataUrl);
-      setForm({ ...form, image_url: dataUrl });
-      setError("");
-    };
-    reader.onerror = () => {
-      setError("Failed to read image file");
-    };
-    reader.readAsDataURL(file);
+    void (async () => {
+      try {
+        const webpDataUrl = await convertImageFileToWebp(file);
+        setImagePreview(webpDataUrl);
+        setForm({ ...form, image_url: webpDataUrl });
+        setError("");
+      } catch {
+        setError("Failed to process image file");
+      }
+    })();
   };
 
   const clearImage = () => {
