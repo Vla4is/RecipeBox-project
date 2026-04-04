@@ -118,7 +118,7 @@ export async function getHomeRecommendations(userid?: string, sessionId?: string
 
 async function fetchCandidates(): Promise<CandidateRow[]> {
   const res = await pool.query(
-    `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.proptimemin, r.cooktimemin, r.diet_type, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at,
+    `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.youtube_url, r.proptimemin, r.cooktimemin, r.diet_type, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at,
             COALESCE(popularity.popularity_score, 0) AS popularity_score,
             COALESCE(rating.rating_score, 0) AS rating_score
      FROM recipes r
@@ -522,6 +522,7 @@ function toRecipeRow(candidate: CandidateRow): RecipeRow {
     title: candidate.title,
     description: candidate.description,
     image_url: candidate.image_url,
+    youtube_url: candidate.youtube_url,
     proptimemin: candidate.proptimemin,
     cooktimemin: candidate.cooktimemin,
     diet_type: candidate.diet_type,

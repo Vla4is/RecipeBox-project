@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useNavigate } from "react-router-dom";
 import { getRecipeDietBadge } from "./recipeDiet";
+import { getYouTubeEmbedUrl } from "./youtube";
 import "./App.css";
 
 type Recipe = {
@@ -9,6 +10,7 @@ type Recipe = {
   title: string;
   description: string | null;
   image_url: string | null;
+  youtube_url: string | null;
   proptimemin: number | null;
   cooktimemin: number | null;
   diet_type: string | null;
@@ -102,6 +104,7 @@ export default function RecipeDetails() {
   });
   const [ratingLoading, setRatingLoading] = useState(false);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
+  const [isVideoOpen, setIsVideoOpen] = useState(false);
 
   const handleBackToPrevious = () => {
     if (window.history.length > 1) {
@@ -315,6 +318,7 @@ export default function RecipeDetails() {
   const dietBadge = getRecipeDietBadge(recipe.diet_type);
   const totalTime =
     (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0) || null;
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(recipe.youtube_url);
 
   return (
     <div className="rd-page">
@@ -486,6 +490,56 @@ export default function RecipeDetails() {
           </motion.div>
         </div>
       </motion.section>
+
+      {youtubeEmbedUrl && (
+        <motion.section
+          className="rd-video-shell"
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.12 }}
+        >
+          <button
+            type="button"
+            className={`rd-video-toggle ${isVideoOpen ? "rd-video-toggle-open" : ""}`}
+            onClick={() => setIsVideoOpen((prev) => !prev)}
+            aria-expanded={isVideoOpen}
+            aria-controls="recipe-video-panel"
+          >
+            <div className="rd-video-toggle-main">
+              <span className="rd-video-play">▶</span>
+              <div>
+                <span className="rd-video-kicker">Watch the recipe</span>
+                <strong className="rd-video-title">See the full technique before you start cooking</strong>
+                <span className="rd-video-note">Perfect for texture, timing, and plating cues.</span>
+              </div>
+            </div>
+            <span className="rd-video-chevron">{isVideoOpen ? "−" : "+"}</span>
+          </button>
+
+          <AnimatePresence initial={false}>
+            {isVideoOpen && (
+              <motion.div
+                id="recipe-video-panel"
+                className="rd-video-panel"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: "easeInOut" }}
+              >
+                <div className="rd-video-frame">
+                  <iframe
+                    src={youtubeEmbedUrl}
+                    title={`${recipe.title} YouTube video`}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allowFullScreen
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.section>
+      )}
 
       {/* ========== BODY ========== */}
       <div className="rd-body">

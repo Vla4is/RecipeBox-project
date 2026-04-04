@@ -119,6 +119,13 @@ async function createTables() {
         await pool.query(`ALTER TABLE recipes ADD COLUMN image_url TEXT`);
         console.log('Added image_url column to recipes table');
       }
+      const youtubeUrlCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'youtube_url'`
+      );
+      if (youtubeUrlCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE recipes ADD COLUMN youtube_url TEXT`);
+        console.log('Added youtube_url column to recipes table');
+      }
       // ensure userid column exists (added later)
       const userIdCheck = await pool.query(
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'userid'`
@@ -159,6 +166,7 @@ async function createTables() {
           title VARCHAR(255) NOT NULL,
           description TEXT,
           image_url TEXT,
+          youtube_url TEXT,
           propTimeMin INT,
           cookTimeMin INT,
           totalTimeMin INT GENERATED ALWAYS AS (

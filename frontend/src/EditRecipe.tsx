@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { normalizeRecipeDietType } from "./recipeDiet";
+import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from "./youtube";
 import "./App.css";
 
 const DIFFICULTY_OPTIONS = ["EASY", "MEDIUM", "HARD"] as const;
@@ -27,6 +28,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
     title: "",
     description: "",
     image_url: "",
+    youtube_url: "",
     prepTimeMin: "",
     cookTimeMin: "",
     servings: "",
@@ -43,6 +45,8 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const youtubeEmbedUrl = getYouTubeEmbedUrl(form.youtube_url);
+  const youtubeThumbnailUrl = getYouTubeThumbnailUrl(form.youtube_url);
 
   // Load existing recipe data
   useEffect(() => {
@@ -62,6 +66,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
           title: r.title || "",
           description: r.description || "",
           image_url: r.image_url || "",
+          youtube_url: r.youtube_url || "",
           prepTimeMin: r.proptimemin != null ? String(r.proptimemin) : "",
           cookTimeMin: r.cooktimemin != null ? String(r.cooktimemin) : "",
           servings: r.servings != null ? String(r.servings) : "",
@@ -153,6 +158,10 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (form.youtube_url.trim() && !youtubeEmbedUrl) {
+      setError("Please enter a valid YouTube link");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -179,6 +188,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
         title: form.title,
         description: form.description || undefined,
         image_url: form.image_url || undefined,
+        youtube_url: form.youtube_url.trim() || undefined,
         prepTimeMin: form.prepTimeMin ? Number(form.prepTimeMin) : undefined,
         cookTimeMin: form.cookTimeMin ? Number(form.cookTimeMin) : undefined,
         dietType: normalizeRecipeDietType(form.dietType),
@@ -376,6 +386,55 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
                   );
                 })}
               </div>
+            </div>
+
+            <div className="auth-field">
+              <label className="auth-label" htmlFor="recipe-youtube-url">YouTube Video</label>
+              <input
+                id="recipe-youtube-url"
+                name="youtube_url"
+                type="url"
+                placeholder="Paste a YouTube link for a live preview"
+                value={form.youtube_url}
+                onChange={handleChange}
+                className="auth-input"
+              />
+              <p className="add-recipe-helper-text">
+                Supports `youtube.com`, `youtu.be`, Shorts, and embed links.
+              </p>
+
+              {form.youtube_url.trim() && (
+                youtubeEmbedUrl ? (
+                  <div className="add-recipe-video-preview">
+                    <div className="add-recipe-video-preview-head">
+                      <span className="add-recipe-video-preview-badge">▶</span>
+                      <div>
+                        <strong>Live video preview</strong>
+                        <p>The recipe page will show this in an expandable “Watch the recipe” panel.</p>
+                      </div>
+                    </div>
+                    <div className="add-recipe-video-frame">
+                      <iframe
+                        src={youtubeEmbedUrl}
+                        title="YouTube video preview"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                      />
+                    </div>
+                    {youtubeThumbnailUrl && (
+                      <div className="add-recipe-video-preview-foot">
+                        <img src={youtubeThumbnailUrl} alt="YouTube thumbnail preview" />
+                        <span>Previewing the linked YouTube video.</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="add-recipe-helper-text add-recipe-helper-text-error">
+                    This doesn&apos;t look like a valid YouTube link yet.
+                  </p>
+                )
+              )}
             </div>
 
             <div className="add-recipe-row">
