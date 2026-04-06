@@ -1245,6 +1245,45 @@
   color: #166534;
 }
 
+.profile-upload-zone {
+  margin: 0 0 8px;
+}
+
+.profile-upload-label {
+  padding: 24px 18px;
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #1f2937;
+}
+
+.profile-upload-label:hover,
+.add-recipe-file-input:hover ~ .profile-upload-label {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.profile-upload-label .add-recipe-upload-text {
+  color: #1f2937;
+}
+
+.profile-upload-label .add-recipe-upload-hint {
+  color: #6b7280;
+}
+
+.profile-upload-preview-img {
+  width: 112px;
+  height: 112px;
+  object-fit: cover;
+  border-radius: 50%;
+  margin-bottom: 12px;
+  box-shadow: 0 12px 28px rgba(30, 22, 16, 0.16);
+}
+
+.profile-upload-clear-btn {
+  position: static;
+  margin-top: 12px;
+}
+
 .profile-card-head {
   margin-bottom: 6px;
 }

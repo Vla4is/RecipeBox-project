@@ -122,6 +122,12 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
     })();
   };
 
+  const clearAvatar = () => {
+    setForm((prev) => ({ ...prev, avatar_url: "" }));
+    setError("");
+    setProfileMessage("");
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProfile(true);
@@ -298,13 +304,38 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
           />
 
           <label className="auth-label" htmlFor="profile-avatar">Avatar</label>
-          <input
-            id="profile-avatar"
-            type="file"
-            accept="image/*"
-            onChange={handleAvatarUpload}
-            className="auth-input"
-          />
+          <div className="add-recipe-upload-zone profile-upload-zone">
+            <input
+              id="profile-avatar"
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarUpload}
+              className="add-recipe-file-input"
+            />
+            <label htmlFor="profile-avatar" className="add-recipe-upload-label profile-upload-label">
+              {form.avatar_url ? (
+                <>
+                  <img src={form.avatar_url} alt="Avatar preview" className="profile-upload-preview-img" />
+                  <span className="add-recipe-upload-text">Click to change avatar</span>
+                </>
+              ) : (
+                <>
+                  <span className="add-recipe-upload-icon">👤</span>
+                  <span className="add-recipe-upload-text">Click to upload avatar</span>
+                  <span className="add-recipe-upload-hint">Square image works best</span>
+                </>
+              )}
+            </label>
+            {form.avatar_url ? (
+              <button
+                type="button"
+                onClick={clearAvatar}
+                className="add-recipe-clear-img profile-upload-clear-btn"
+              >
+                ✕ Remove
+              </button>
+            ) : null}
+          </div>
 
           <button type="submit" className="auth-btn" disabled={savingProfile}>
             {savingProfile ? "Saving..." : "Save profile"}
