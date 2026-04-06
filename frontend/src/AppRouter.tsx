@@ -13,6 +13,8 @@ import MyRecipes from "./MyRecipes";
 import EditRecipe from "./EditRecipe";
 import Premium from "./Premium";
 import Billing from "./Billing";
+import MyProfile from "./MyProfile";
+import PublicProfile from "./PublicProfile";
 import { getTokenExpiryMs, isTokenExpired } from "./auth";
 
 const SCROLL_POSITIONS_KEY = "itsystems_scroll_positions_v1";
@@ -138,6 +140,11 @@ export default function AppRouter() {
             <MyRecipes token={token!} onUnauthorized={handleLogout} />
           </RequireAuth>
         } />
+        <Route path="/my-profile" element={
+          <RequireAuth loggedIn={!!token}>
+            <MyProfile token={token!} onUnauthorized={handleLogout} />
+          </RequireAuth>
+        } />
         <Route path="/edit-recipe/:recipeId" element={
           <RequireAuth loggedIn={!!token}>
             <EditRecipe token={token!} onUnauthorized={handleLogout} />
@@ -154,6 +161,7 @@ export default function AppRouter() {
           </RequireAuth>
         } />
         <Route path="/recipes/:recipeId" element={<RecipeDetails />} />
+        <Route path="/:nickname" element={<PublicProfile />} />
       </Routes>
       <Footer />
     </BrowserRouter>

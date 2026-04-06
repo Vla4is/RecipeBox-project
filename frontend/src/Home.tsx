@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent } 
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { motion, useMotionValue, animate } from "framer-motion";
 import { getRecipeDietBadge, parseSearchDietFilter, type SearchDietFilter } from "./recipeDiet";
+import RecipeGridCard from "./RecipeGridCard";
 import "./App.css";
 
 const categories = [
@@ -411,60 +412,14 @@ function Home() {
 
   const showExpandedSearchUi = isSearchUiFocused || showSearchResults;
 
-  const renderRecipeCard = (recipe: RecipeFromDB, key: string, transitionDuration = 0.4) => {
-    const dietBadge = getRecipeDietBadge(recipe.diet_type);
-    const totalRecipeTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0);
-
-    return (
-      <motion.div
-        key={key}
-        className="recipe-card"
-        onClick={() => navigate(`/recipes/${recipe.recipeid}`)}
-        whileHover={{ scale: 1.03, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: transitionDuration }}
-      >
-        <div className="recipe-card-img-wrap">
-          <img
-            src={recipe.image_url || "https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg"}
-            alt={recipe.title}
-            className="recipe-card-img"
-            loading="lazy"
-            decoding="async"
-          />
-          {recipe.difficulty && (
-            <span className={`recipe-card-badge badge-${recipe.difficulty.toLowerCase()}`}>
-              {recipe.difficulty}
-            </span>
-          )}
-        </div>
-        <div className="recipe-card-body">
-          <h3 className="recipe-card-title">{recipe.title}</h3>
-          {recipe.description && (
-            <p className="recipe-card-desc">{recipe.description}</p>
-          )}
-          <div className="recipe-card-meta">
-            {totalRecipeTime > 0 && (
-              <span className="recipe-card-meta-item">⏱️ {totalRecipeTime} min</span>
-            )}
-            {recipe.servings != null && (
-              <span className="recipe-card-meta-item">🍽️ {recipe.servings} servings</span>
-            )}
-            {dietBadge && (
-              <span
-                className={`recipe-card-meta-item recipe-card-diet-meta ${dietBadge.className}`}
-                title={dietBadge.label}
-                aria-label={dietBadge.label}
-              >
-                {dietBadge.icon}
-              </span>
-            )}
-          </div>
-        </div>
-      </motion.div>
-    );
-  };
+  const renderRecipeCard = (recipe: RecipeFromDB, key: string, transitionDuration = 0.4) => (
+    <RecipeGridCard
+      key={key}
+      recipe={recipe}
+      onClick={() => navigate(`/recipes/${recipe.recipeid}`)}
+      transitionDuration={transitionDuration}
+    />
+  );
 
   const sortedSearchResults = useMemo(() => {
     if (searchResults.length <= 1 || searchSort === "relevance") {

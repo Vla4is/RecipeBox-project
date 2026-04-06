@@ -5,7 +5,14 @@ import jwt from "jsonwebtoken";
 import initializeDatabase from "./db-init";
 import pool from "./database";
 import { buildCookbookXml, getCookbookRecipes } from "./services/cookbookService";
-import { createUser, authenticateUser } from "./services/userService";
+import {
+  createUser,
+  authenticateUser,
+  getCurrentUserProfile,
+  getPublicUserProfileByNickname,
+  updateUserPassword,
+  updateUserProfile,
+} from "./services/userService";
 import {
   getPublicRecipes,
   createRecipe,
@@ -23,6 +30,7 @@ import {
   getRecipeRatingSummary,
   setRecipeRating,
   normalizeRecipeDietType,
+  getPublicRecipesByUser,
 } from "./services/recipeService";
 import { searchRecipes } from "./services/recipeSearchService";
 import {
@@ -51,7 +59,7 @@ app.use("/cookbook-assets", express.static(path.resolve(__dirname, "../public"))
 
 // JWT auth middleware
 interface AuthRequest extends Request {
-  user?: { userid: string; email: string; name: string };
+  user?: { userid: string; email?: string };
 }
 
 function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
@@ -61,7 +69,7 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   }
   try {
     const token = header.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { userid: string; email: string; name: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as { userid: string; email?: string };
     req.user = decoded;
     return next();
   } catch {
@@ -69,14 +77,14 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   }
 }
 
-function getOptionalUser(req: Request): { userid: string; email: string; name: string } | null {
+function getOptionalUser(req: Request): { userid: string; email?: string } | null {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) {
     return null;
   }
   try {
     const token = header.split(" ")[1];
-    const decoded = jwt.verify(token, JWT_SECRET) as { userid: string; email: string; name: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as { userid: string; email?: string };
     return decoded;
   } catch {
     return null;
@@ -96,6 +104,99 @@ app.post("/api/login", async (req: Request, res: Response) => {
     return res.json(result);
   } catch (err) {
     console.error("Login error:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/me", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const profile = await getCurrentUserProfile(req.user!.userid);
+    if (!profile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    return res.json({ profile });
+  } catch (err) {
+    console.error("Error fetching current profile:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/api/me/profile", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, nickname, avatar_url } = req.body || {};
+    if (!name || !nickname) {
+      return res.status(400).json({ error: "name and nickname are required" });
+    }
+
+    const profile = await updateUserProfile(req.user!.userid, {
+      name: String(name),
+      nickname: String(nickname),
+      avatar_url: typeof avatar_url === "string" && avatar_url.trim() ? avatar_url : null,
+    });
+
+    return res.json({ success: true, profile });
+  } catch (err) {
+    console.error("Error updating profile:", err);
+    const typedErr = err as Error & { code?: string };
+
+    if (
+      typedErr.code === "PROFILE_VALIDATION_ERROR" ||
+      typedErr.code === "NICKNAME_TAKEN" ||
+      typedErr.code === "NICKNAME_CHANGE_LIMIT" ||
+      typedErr.code === "NICKNAME_CHANGE_COOLDOWN"
+    ) {
+      return res.status(400).json({ error: typedErr.message });
+    }
+
+    if (typedErr.code === "USER_NOT_FOUND") {
+      return res.status(404).json({ error: typedErr.message });
+    }
+
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/api/me/password", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: "currentPassword and newPassword are required" });
+    }
+
+    await updateUserPassword(req.user!.userid, String(currentPassword), String(newPassword));
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Error updating password:", err);
+    const typedErr = err as Error & { code?: string };
+
+    if (typedErr.code === "INVALID_PASSWORD" || typedErr.code === "PROFILE_VALIDATION_ERROR") {
+      return res.status(400).json({ error: typedErr.message });
+    }
+
+    if (typedErr.code === "USER_NOT_FOUND") {
+      return res.status(404).json({ error: typedErr.message });
+    }
+
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/users/:nickname", async (req: Request, res: Response) => {
+  try {
+    const nickname = String(req.params.nickname || "");
+    if (!nickname) {
+      return res.status(400).json({ error: "nickname is required" });
+    }
+
+    const profile = await getPublicUserProfileByNickname(nickname);
+    if (!profile) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const recipes = await getPublicRecipesByUser(profile.userid);
+    return res.json({ profile, recipes });
+  } catch (err) {
+    console.error("Error fetching public profile:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });

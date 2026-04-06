@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { getRecipeDietBadge } from "./recipeDiet";
 import { getYouTubeEmbedUrl } from "./youtube";
 import "./App.css";
@@ -36,6 +36,12 @@ type Step = {
 
 type RecipeDetailsResponse = {
   recipe: Recipe;
+  author: {
+    userid: string;
+    nickname: string;
+    name: string;
+    avatar_url: string | null;
+  } | null;
   ingredients: Ingredient[];
   steps: Step[];
   tags: string[];
@@ -313,7 +319,7 @@ export default function RecipeDetails() {
     );
   }
 
-  const { recipe, ingredients, steps, tags } = data;
+  const { recipe, author, ingredients, steps, tags } = data;
   const diff = difficultyColor(recipe.difficulty);
   const dietBadge = getRecipeDietBadge(recipe.diet_type);
   const totalTime =
@@ -375,6 +381,29 @@ export default function RecipeDetails() {
               {recipe.description}
             </motion.p>
           )}
+
+          {author ? (
+            <motion.div
+              className="rd-author-strip"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.33 }}
+            >
+              <Link to={`/@${author.nickname}`} className="rd-author-link">
+                {author.avatar_url ? (
+                  <img src={author.avatar_url} alt={author.nickname} className="rd-author-avatar" />
+                ) : (
+                  <span className="rd-author-avatar rd-author-avatar-fallback">
+                    {author.nickname.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <span className="rd-author-copy">
+                  <span className="rd-author-label">Added by</span>
+                  <strong>@{author.nickname}</strong>
+                </span>
+              </Link>
+            </motion.div>
+          ) : null}
 
           {/* quick-stat pills */}
           <motion.div

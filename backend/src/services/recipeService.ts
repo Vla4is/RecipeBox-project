@@ -17,6 +17,13 @@ export interface RecipeRow {
   updated_at: Date;
 }
 
+export interface RecipeAuthor {
+  userid: string;
+  nickname: string;
+  name: string;
+  avatar_url: string | null;
+}
+
 export type RecipeDietType = "NONE" | "VEGETARIAN" | "VEGAN";
 
 export function normalizeRecipeDietType(value: unknown): RecipeDietType {
@@ -44,6 +51,7 @@ export interface RecipeDetailStep {
 
 export interface RecipeDetail {
   recipe: RecipeRow;
+  author: RecipeAuthor | null;
   ingredients: RecipeDetailIngredient[];
   steps: RecipeDetailStep[];
   tags: string[];
@@ -231,9 +239,27 @@ export async function getRecipeTimeRanges(userid?: string): Promise<RecipeTimeRa
 
 export async function getRecipeDetails(recipeId: string, userid?: string): Promise<RecipeDetail | null> {
   const recipeRes = await pool.query(
-    `SELECT recipeid, userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
-     FROM recipes
-     WHERE recipeid = $1 AND (visibility = 'PUBLIC' OR ($2::uuid IS NOT NULL AND userid = $2::uuid))`,
+    `SELECT r.recipeid,
+            r.userid,
+            r.title,
+            r.description,
+            r.image_url,
+            r.youtube_url,
+            r.proptimemin,
+            r.cooktimemin,
+            r.diet_type,
+            r.servings,
+            r.difficulty,
+            r.visibility,
+            r.created_at,
+            r.updated_at,
+            u.userid AS author_userid,
+            u.nickname AS author_nickname,
+            u.name AS author_name,
+            u.avatar_url AS author_avatar_url
+     FROM recipes r
+     LEFT JOIN users u ON u.userid = r.userid
+     WHERE r.recipeid = $1 AND (r.visibility = 'PUBLIC' OR ($2::uuid IS NOT NULL AND r.userid = $2::uuid))`,
     [recipeId, userid ?? null]
   );
 
@@ -241,7 +267,28 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
     return null;
   }
 
-  const recipe = recipeRes.rows[0] as RecipeRow;
+  const row = recipeRes.rows[0] as RecipeRow & {
+    author_userid: string | null;
+    author_nickname: string | null;
+    author_name: string | null;
+    author_avatar_url: string | null;
+  };
+  const recipe: RecipeRow = {
+    recipeid: row.recipeid,
+    userid: row.userid,
+    title: row.title,
+    description: row.description,
+    image_url: row.image_url,
+    youtube_url: row.youtube_url,
+    proptimemin: row.proptimemin,
+    cooktimemin: row.cooktimemin,
+    diet_type: normalizeRecipeDietType(row.diet_type),
+    servings: row.servings,
+    difficulty: row.difficulty,
+    visibility: row.visibility,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 
   const ingredientsRes = await pool.query(
     `SELECT ri.recipeingredientid, i.ingredientid, i.name, ri.amount, ri.unit, ri.notes
@@ -270,6 +317,14 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
 
   return {
     recipe,
+    author: row.author_userid && row.author_nickname && row.author_name
+      ? {
+          userid: row.author_userid,
+          nickname: row.author_nickname,
+          name: row.author_name,
+          avatar_url: row.author_avatar_url ?? null,
+        }
+      : null,
     ingredients: ingredientsRes.rows,
     steps: stepsRes.rows,
     tags: tagsRes.rows.map((row) => row.name),
@@ -487,14 +542,53 @@ export async function removeSavedRecipeForUser(userid: string, recipeId: string)
 
 export async function getRecipeDetailsForOwner(recipeId: string, userid: string): Promise<RecipeDetail | null> {
   const recipeRes = await pool.query(
-    `SELECT recipeid, userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
-     FROM recipes
-     WHERE recipeid = $1 AND userid = $2`,
+    `SELECT r.recipeid,
+            r.userid,
+            r.title,
+            r.description,
+            r.image_url,
+            r.youtube_url,
+            r.proptimemin,
+            r.cooktimemin,
+            r.diet_type,
+            r.servings,
+            r.difficulty,
+            r.visibility,
+            r.created_at,
+            r.updated_at,
+            u.userid AS author_userid,
+            u.nickname AS author_nickname,
+            u.name AS author_name,
+            u.avatar_url AS author_avatar_url
+     FROM recipes r
+     LEFT JOIN users u ON u.userid = r.userid
+     WHERE r.recipeid = $1 AND r.userid = $2`,
     [recipeId, userid]
   );
 
   if (recipeRes.rows.length === 0) return null;
-  const recipe = recipeRes.rows[0] as RecipeRow;
+  const row = recipeRes.rows[0] as RecipeRow & {
+    author_userid: string | null;
+    author_nickname: string | null;
+    author_name: string | null;
+    author_avatar_url: string | null;
+  };
+  const recipe: RecipeRow = {
+    recipeid: row.recipeid,
+    userid: row.userid,
+    title: row.title,
+    description: row.description,
+    image_url: row.image_url,
+    youtube_url: row.youtube_url,
+    proptimemin: row.proptimemin,
+    cooktimemin: row.cooktimemin,
+    diet_type: normalizeRecipeDietType(row.diet_type),
+    servings: row.servings,
+    difficulty: row.difficulty,
+    visibility: row.visibility,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 
   const ingredientsRes = await pool.query(
     `SELECT ri.recipeingredientid, i.ingredientid, i.name, ri.amount, ri.unit, ri.notes
@@ -518,10 +612,30 @@ export async function getRecipeDetailsForOwner(recipeId: string, userid: string)
 
   return {
     recipe,
+    author: row.author_userid && row.author_nickname && row.author_name
+      ? {
+          userid: row.author_userid,
+          nickname: row.author_nickname,
+          name: row.author_name,
+          avatar_url: row.author_avatar_url ?? null,
+        }
+      : null,
     ingredients: ingredientsRes.rows,
     steps: stepsRes.rows,
     tags: tagsRes.rows.map((row) => row.name),
   };
+}
+
+export async function getPublicRecipesByUser(userid: string): Promise<RecipeRow[]> {
+  const res = await pool.query(
+    `SELECT recipeid, userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
+     FROM recipes
+     WHERE userid = $1::uuid AND visibility = 'PUBLIC'
+     ORDER BY created_at DESC`,
+    [userid]
+  );
+
+  return res.rows;
 }
 
 export async function updateRecipe(recipeId: string, userid: string, input: CreateRecipeInput): Promise<RecipeRow | null> {

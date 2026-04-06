@@ -1,6 +1,23 @@
 import pool from "./database";
 import seedRecipes from "./seedRecipes";
 
+function normalizeNicknameSeed(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_")
+    .slice(0, 30);
+}
+
+function buildNicknameSeed(name: string) {
+  const firstPart = name.trim().split(/\s+/).filter(Boolean)[0] || "";
+  return normalizeNicknameSeed(firstPart) || normalizeNicknameSeed(name) || "chef";
+}
+
 async function createTables() {
   try {
     await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
@@ -91,19 +108,84 @@ async function createTables() {
     // ensure users table
     if (await tableExists('users')) {
       console.log('Users table already exists, skipping creation');
+      const nicknameCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'nickname'`
+      );
+      if (nicknameCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN nickname VARCHAR(30)`);
+        console.log('Added nickname column to users table');
+      }
+
+      const avatarCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'avatar_url'`
+      );
+      if (avatarCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN avatar_url TEXT`);
+        console.log('Added avatar_url column to users table');
+      }
+
+      const changeCountCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'nickname_change_count'`
+      );
+      if (changeCountCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN nickname_change_count INT NOT NULL DEFAULT 0`);
+        console.log('Added nickname_change_count column to users table');
+      }
+
+      const changedAtCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'nickname_changed_at'`
+      );
+      if (changedAtCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN nickname_changed_at TIMESTAMP`);
+        console.log('Added nickname_changed_at column to users table');
+      }
     } else {
       await pool.query(`
         CREATE TABLE users (
           userid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           name VARCHAR(255) NOT NULL,
+          nickname VARCHAR(30) NOT NULL,
           email VARCHAR(255) UNIQUE NOT NULL,
+          avatar_url TEXT,
           password_hash VARCHAR(255) NOT NULL,
+          nickname_change_count INT NOT NULL DEFAULT 0,
+          nickname_changed_at TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
       console.log('Users table created successfully');
     }
+
+    const usersMissingNicknames = await pool.query(
+      `SELECT userid, name FROM users WHERE nickname IS NULL OR LENGTH(TRIM(nickname)) = 0 ORDER BY created_at ASC`
+    );
+    const takenNicknames = new Set<string>();
+    const existingNicknames = await pool.query(
+      `SELECT nickname FROM users WHERE nickname IS NOT NULL AND LENGTH(TRIM(nickname)) > 0`
+    );
+    for (const row of existingNicknames.rows as Array<{ nickname: string }>) {
+      takenNicknames.add(row.nickname.toLowerCase());
+    }
+
+    for (const user of usersMissingNicknames.rows as Array<{ userid: string; name: string }>) {
+      const base = buildNicknameSeed(user.name);
+      let candidate = base;
+      let suffix = 2;
+      while (takenNicknames.has(candidate.toLowerCase())) {
+        candidate = `${base}${suffix}`;
+        suffix += 1;
+      }
+
+      takenNicknames.add(candidate.toLowerCase());
+      await pool.query(`UPDATE users SET nickname = $1, updated_at = CURRENT_TIMESTAMP WHERE userid = $2::uuid`, [
+        candidate,
+        user.userid,
+      ]);
+    }
+
+    await pool.query(`ALTER TABLE users ALTER COLUMN nickname SET NOT NULL`);
+    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_nickname_lower_unique ON users (LOWER(nickname))`);
 
     // ensure recipes table
     if (await tableExists('recipes')) {
