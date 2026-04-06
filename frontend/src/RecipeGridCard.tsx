@@ -81,6 +81,7 @@ export default function RecipeGridCard({
           ) : null}
         </div>
       </div>
+      
     </motion.div>
   );
 }
