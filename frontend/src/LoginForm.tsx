@@ -127,8 +127,26 @@ export default function LoginForm({ onLogin }: { onLogin?: (jwt: string) => void
           >
             {loading ? "Signing in..." : "Sign In"}
           </motion.button>
-          {error && <motion.div className="auth-error" variants={itemVariants}>{error}</motion.div>}
-          {success && <motion.div className="auth-success" variants={itemVariants}>{success}</motion.div>}
+          {error && (
+            <motion.div
+              className="auth-error"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {error}
+            </motion.div>
+          )}
+          {success && (
+            <motion.div
+              className="auth-success"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {success}
+            </motion.div>
+          )}
         </motion.form>
         <motion.div className="auth-footer" variants={itemVariants} initial="hidden" animate="visible">
           Don't have an account? <Link to="/register">Create one</Link>
