@@ -1,8 +1,25 @@
-export async function convertImageFileToWebp(file: File, maxWidth = 1600): Promise<string> {
+export type ImageProcessingOptions = {
+  width?: number;
+  height?: number;
+  quality?: number;
+};
+
+export async function processImage(
+  file: File,
+  options: number | ImageProcessingOptions = 1600
+): Promise<string> {
+  const normalizedOptions: ImageProcessingOptions =
+    typeof options === "number"
+      ? { width: options }
+      : options;
   const dataUrl = await readFileAsDataUrl(file);
   const image = await loadImage(dataUrl);
 
-  const scale = image.width > maxWidth ? maxWidth / image.width : 1;
+  const targetWidthLimit = normalizedOptions.width ?? 1600;
+  const targetHeightLimit = normalizedOptions.height ?? targetWidthLimit;
+  const widthScale = image.width > targetWidthLimit ? targetWidthLimit / image.width : 1;
+  const heightScale = image.height > targetHeightLimit ? targetHeightLimit / image.height : 1;
+  const scale = Math.min(widthScale, heightScale);
   const targetWidth = Math.max(1, Math.round(image.width * scale));
   const targetHeight = Math.max(1, Math.round(image.height * scale));
 
@@ -17,7 +34,7 @@ export async function convertImageFileToWebp(file: File, maxWidth = 1600): Promi
 
   context.drawImage(image, 0, 0, targetWidth, targetHeight);
 
-  const webpBlob = await canvasToBlob(canvas, "image/webp", 0.82);
+  const webpBlob = await canvasToBlob(canvas, "image/webp", normalizedOptions.quality ?? 0.82);
   return await readBlobAsDataUrl(webpBlob);
 }
 

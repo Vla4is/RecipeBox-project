@@ -15,6 +15,7 @@ interface RecipeFromDB {
   title: string;
   description: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   proptimemin: number | null;
   difficulty: string | null;
   cooktimemin: number | null;

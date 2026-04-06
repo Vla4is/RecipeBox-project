@@ -201,6 +201,13 @@ async function createTables() {
         await pool.query(`ALTER TABLE recipes ADD COLUMN image_url TEXT`);
         console.log('Added image_url column to recipes table');
       }
+      const thumbnailCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'thumbnail_url'`
+      );
+      if (thumbnailCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE recipes ADD COLUMN thumbnail_url TEXT`);
+        console.log('Added thumbnail_url column to recipes table');
+      }
       const youtubeUrlCheck = await pool.query(
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'recipes' AND column_name = 'youtube_url'`
       );
@@ -248,6 +255,7 @@ async function createTables() {
           title VARCHAR(255) NOT NULL,
           description TEXT,
           image_url TEXT,
+          thumbnail_url TEXT,
           youtube_url TEXT,
           propTimeMin INT,
           cookTimeMin INT,

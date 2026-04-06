@@ -480,7 +480,7 @@ app.get("/api/recommendations/home", async (req: Request, res: Response) => {
 // Create a new recipe (authenticated)
 app.post("/api/recipes", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { title, description, image_url, youtube_url, prepTimeMin, cookTimeMin, dietType, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
+    const { title, description, image_url, thumbnail_url, youtube_url, prepTimeMin, cookTimeMin, dietType, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       return res.status(400).json({ error: "title is required" });
     }
@@ -489,6 +489,7 @@ app.post("/api/recipes", requireAuth, async (req: AuthRequest, res: Response) =>
       title: title.trim(),
       description: description || undefined,
       image_url: image_url || undefined,
+      thumbnail_url: thumbnail_url || undefined,
       youtube_url: youtube_url || undefined,
       prepTimeMin: prepTimeMin ? Number(prepTimeMin) : undefined,
       cookTimeMin: cookTimeMin ? Number(cookTimeMin) : undefined,
@@ -588,7 +589,7 @@ app.get("/api/my-recipes/:recipeId", requireAuth, async (req: AuthRequest, res: 
 app.put("/api/recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const recipeId = req.params.recipeId as string;
-    const { title, description, image_url, youtube_url, prepTimeMin, cookTimeMin, dietType, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
+    const { title, description, image_url, thumbnail_url, youtube_url, prepTimeMin, cookTimeMin, dietType, servings, difficulty, visibility, steps, ingredients, tags } = req.body || {};
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       return res.status(400).json({ error: "title is required" });
     }
@@ -596,6 +597,7 @@ app.put("/api/recipes/:recipeId", requireAuth, async (req: AuthRequest, res: Res
       title: title.trim(),
       description: description || undefined,
       image_url: image_url || undefined,
+      thumbnail_url: thumbnail_url || undefined,
       youtube_url: youtube_url || undefined,
       prepTimeMin: prepTimeMin ? Number(prepTimeMin) : undefined,
       cookTimeMin: cookTimeMin ? Number(cookTimeMin) : undefined,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { convertImageFileToWebp } from "./imageUpload";
+import { processImage } from "./imageUpload";
 import "./App.css";
 
 type Profile = {
@@ -110,8 +110,12 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
 
     void (async () => {
       try {
-        const webpDataUrl = await convertImageFileToWebp(file, 800);
-        setForm((prev) => ({ ...prev, avatar_url: webpDataUrl }));
+        const processedAvatar = await processImage(file, {
+          width: 320,
+          height: 320,
+          quality: 0.62,
+        });
+        setForm((prev) => ({ ...prev, avatar_url: processedAvatar }));
       } catch {
         setError("Failed to process avatar image");
       }

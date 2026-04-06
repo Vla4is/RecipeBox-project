@@ -6,6 +6,7 @@ type RecipeCardData = {
   title: string;
   description: string | null;
   image_url: string | null;
+  thumbnail_url?: string | null;
   proptimemin: number | null;
   cooktimemin: number | null;
   diet_type: string | null;
@@ -46,7 +47,7 @@ export default function RecipeGridCard({
     >
       <div className="recipe-card-img-wrap">
         <img
-          src={recipe.image_url || DEFAULT_IMAGE}
+          src={recipe.thumbnail_url || recipe.image_url || DEFAULT_IMAGE}
           alt={recipe.title}
           className="recipe-card-img"
           loading="lazy"

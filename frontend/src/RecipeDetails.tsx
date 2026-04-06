@@ -362,6 +362,29 @@ export default function RecipeDetails() {
             </button>
           </div>
 
+          {author ? (
+            <motion.div
+              className="rd-author-strip"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.12 }}
+            >
+              <Link to={`/@${author.nickname}`} className="rd-author-link">
+                {author.avatar_url ? (
+                  <img src={author.avatar_url} alt={author.nickname} className="rd-author-avatar" />
+                ) : (
+                  <span className="rd-author-avatar rd-author-avatar-fallback">
+                    {author.nickname.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <span className="rd-author-copy">
+                  <span className="rd-author-label">Added by</span>
+                  <strong className="rd-author-nickname">@{author.nickname}</strong>
+                </span>
+              </Link>
+            </motion.div>
+          ) : null}
+
           <motion.h1
             className="rd-title"
             initial={{ opacity: 0, y: 28 }}
@@ -381,29 +404,6 @@ export default function RecipeDetails() {
               {recipe.description}
             </motion.p>
           )}
-
-          {author ? (
-            <motion.div
-              className="rd-author-strip"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: 0.33 }}
-            >
-              <Link to={`/@${author.nickname}`} className="rd-author-link">
-                {author.avatar_url ? (
-                  <img src={author.avatar_url} alt={author.nickname} className="rd-author-avatar" />
-                ) : (
-                  <span className="rd-author-avatar rd-author-avatar-fallback">
-                    {author.nickname.slice(0, 2).toUpperCase()}
-                  </span>
-                )}
-                <span className="rd-author-copy">
-                  <span className="rd-author-label">Added by</span>
-                  <strong>@{author.nickname}</strong>
-                </span>
-              </Link>
-            </motion.div>
-          ) : null}
 
           {/* quick-stat pills */}
           <motion.div

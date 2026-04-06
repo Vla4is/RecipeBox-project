@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { convertImageFileToWebp } from "./imageUpload";
+import { processImage } from "./imageUpload";
 import { normalizeRecipeDietType } from "./recipeDiet";
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from "./youtube";
 import "./App.css";
@@ -29,6 +29,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
     title: "",
     description: "",
     image_url: "",
+    thumbnail_url: "",
     youtube_url: "",
     prepTimeMin: "",
     cookTimeMin: "",
@@ -67,6 +68,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
           title: r.title || "",
           description: r.description || "",
           image_url: r.image_url || "",
+          thumbnail_url: r.thumbnail_url || "",
           youtube_url: r.youtube_url || "",
           prepTimeMin: r.proptimemin != null ? String(r.proptimemin) : "",
           cookTimeMin: r.cooktimemin != null ? String(r.cooktimemin) : "",
@@ -125,9 +127,18 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
     }
     void (async () => {
       try {
-        const webpDataUrl = await convertImageFileToWebp(file);
-        setImagePreview(webpDataUrl);
-        setForm({ ...form, image_url: webpDataUrl });
+        const processedImage = await processImage(file, {
+          width: 1200,
+          height: 1200,
+          quality: 0.72,
+        });
+        const processedThumbnail = await processImage(file, {
+          width: 480,
+          height: 320,
+          quality: 0.64,
+        });
+        setImagePreview(processedImage);
+        setForm({ ...form, image_url: processedImage, thumbnail_url: processedThumbnail });
         setError("");
       } catch {
         setError("Failed to process image file");
@@ -137,7 +148,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
 
   const clearImage = () => {
     setImagePreview(null);
-    setForm({ ...form, image_url: "" });
+    setForm({ ...form, image_url: "", thumbnail_url: "" });
   };
 
   const addStep = () => setSteps([...steps, { instruction: "", timerSec: "" }]);
@@ -190,6 +201,7 @@ export default function EditRecipe({ token, onUnauthorized }: { token: string; o
         title: form.title,
         description: form.description || undefined,
         image_url: form.image_url || undefined,
+        thumbnail_url: form.thumbnail_url || undefined,
         youtube_url: form.youtube_url.trim() || undefined,
         prepTimeMin: form.prepTimeMin ? Number(form.prepTimeMin) : undefined,
         cookTimeMin: form.cookTimeMin ? Number(form.cookTimeMin) : undefined,

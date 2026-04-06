@@ -6,6 +6,7 @@ export interface RecipeRow {
   title: string;
   description: string | null;
   image_url: string | null;
+  thumbnail_url: string | null;
   youtube_url: string | null;
   proptimemin: number | null;
   cooktimemin: number | null;
@@ -65,7 +66,7 @@ export interface RecipeRatingSummary {
 
 export async function getPublicRecipes(): Promise<RecipeRow[]> {
   const res = await pool.query(
-    `SELECT recipeid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, title, description, image_url, thumbnail_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
      WHERE visibility = 'PUBLIC'
      ORDER BY created_at DESC`
@@ -138,9 +139,10 @@ export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Prom
          r.recipeid,
          r.userid,
          r.title,
-         r.description,
-         r.image_url,
-         r.youtube_url,
+        r.description,
+        r.image_url,
+        r.thumbnail_url,
+        r.youtube_url,
          r.proptimemin,
          r.cooktimemin,
          r.diet_type,
@@ -170,6 +172,7 @@ export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Prom
             title,
             description,
             image_url,
+            thumbnail_url,
             youtube_url,
             proptimemin,
             cooktimemin,
@@ -194,6 +197,7 @@ export async function getHomeTagSections(input: HomeTagSectionsInput = {}): Prom
       title: row.title,
       description: row.description,
       image_url: row.image_url,
+      thumbnail_url: row.thumbnail_url,
       youtube_url: row.youtube_url,
       proptimemin: row.proptimemin,
       cooktimemin: row.cooktimemin,
@@ -244,6 +248,7 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
             r.title,
             r.description,
             r.image_url,
+            r.thumbnail_url,
             r.youtube_url,
             r.proptimemin,
             r.cooktimemin,
@@ -279,6 +284,7 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
     title: row.title,
     description: row.description,
     image_url: row.image_url,
+    thumbnail_url: row.thumbnail_url,
     youtube_url: row.youtube_url,
     proptimemin: row.proptimemin,
     cooktimemin: row.cooktimemin,
@@ -368,6 +374,7 @@ export interface CreateRecipeInput {
   title: string;
   description?: string;
   image_url?: string;
+  thumbnail_url?: string;
   youtube_url?: string;
   prepTimeMin?: number;
   cookTimeMin?: number;
@@ -387,14 +394,15 @@ export async function createRecipe(input: CreateRecipeInput): Promise<RecipeRow>
     
     // Insert main recipe
     const recipeRes = await client.query(
-      `INSERT INTO recipes (userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::recipe_diet_enum, $9, $10::difficulty_enum, $11::visibility_enum)
-       RETURNING recipeid, userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at`,
+      `INSERT INTO recipes (userid, title, description, image_url, thumbnail_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::recipe_diet_enum, $10, $11::difficulty_enum, $12::visibility_enum)
+       RETURNING recipeid, userid, title, description, image_url, thumbnail_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at`,
       [
         input.userid || null,
         input.title,
         input.description || null,
         input.image_url || null,
+        input.thumbnail_url || null,
         input.youtube_url || null,
         input.prepTimeMin ?? null,
         input.cookTimeMin ?? null,
@@ -473,7 +481,7 @@ export async function createRecipe(input: CreateRecipeInput): Promise<RecipeRow>
 
 export async function getUserRecipes(userid: string): Promise<RecipeRow[]> {
   const res = await pool.query(
-    `SELECT recipeid, userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, userid, title, description, image_url, thumbnail_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
      WHERE userid = $1
      ORDER BY created_at DESC`,
@@ -484,7 +492,7 @@ export async function getUserRecipes(userid: string): Promise<RecipeRow[]> {
 
 export async function getSavedRecipes(userid: string): Promise<RecipeRow[]> {
   const res = await pool.query(
-    `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.youtube_url, r.proptimemin, r.cooktimemin, r.diet_type, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at
+    `SELECT r.recipeid, r.userid, r.title, r.description, r.image_url, r.thumbnail_url, r.youtube_url, r.proptimemin, r.cooktimemin, r.diet_type, r.servings, r.difficulty, r.visibility, r.created_at, r.updated_at
      FROM favorites f
      JOIN recipes r ON r.recipeid = f.recipeid
      WHERE f.userid = $1::uuid
@@ -547,6 +555,7 @@ export async function getRecipeDetailsForOwner(recipeId: string, userid: string)
             r.title,
             r.description,
             r.image_url,
+            r.thumbnail_url,
             r.youtube_url,
             r.proptimemin,
             r.cooktimemin,
@@ -579,6 +588,7 @@ export async function getRecipeDetailsForOwner(recipeId: string, userid: string)
     title: row.title,
     description: row.description,
     image_url: row.image_url,
+    thumbnail_url: row.thumbnail_url,
     youtube_url: row.youtube_url,
     proptimemin: row.proptimemin,
     cooktimemin: row.cooktimemin,
@@ -628,7 +638,7 @@ export async function getRecipeDetailsForOwner(recipeId: string, userid: string)
 
 export async function getPublicRecipesByUser(userid: string): Promise<RecipeRow[]> {
   const res = await pool.query(
-    `SELECT recipeid, userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
+    `SELECT recipeid, userid, title, description, image_url, thumbnail_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at
      FROM recipes
      WHERE userid = $1::uuid AND visibility = 'PUBLIC'
      ORDER BY created_at DESC`,
@@ -655,13 +665,14 @@ export async function updateRecipe(recipeId: string, userid: string, input: Crea
 
     // Update main recipe
     const recipeRes = await client.query(
-      `UPDATE recipes SET title = $1, description = $2, image_url = $3, youtube_url = $4, proptimemin = $5, cooktimemin = $6, diet_type = $7::recipe_diet_enum, servings = $8, difficulty = $9::difficulty_enum, visibility = $10::visibility_enum, updated_at = CURRENT_TIMESTAMP
-       WHERE recipeid = $11 AND userid = $12
-       RETURNING recipeid, userid, title, description, image_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at`,
+      `UPDATE recipes SET title = $1, description = $2, image_url = $3, thumbnail_url = $4, youtube_url = $5, proptimemin = $6, cooktimemin = $7, diet_type = $8::recipe_diet_enum, servings = $9, difficulty = $10::difficulty_enum, visibility = $11::visibility_enum, updated_at = CURRENT_TIMESTAMP
+       WHERE recipeid = $12 AND userid = $13
+       RETURNING recipeid, userid, title, description, image_url, thumbnail_url, youtube_url, proptimemin, cooktimemin, diet_type, servings, difficulty, visibility, created_at, updated_at`,
       [
         input.title,
         input.description || null,
         input.image_url || null,
+        input.thumbnail_url || null,
         input.youtube_url || null,
         input.prepTimeMin ?? null,
         input.cookTimeMin ?? null,
