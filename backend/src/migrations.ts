@@ -124,6 +124,25 @@ async function createTables() {
         console.log('Added avatar_url column to users table');
       }
 
+      const backgroundImageCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'background_image_url'`
+      );
+      if (backgroundImageCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN background_image_url TEXT`);
+        console.log('Added background_image_url column to users table');
+      }
+
+      const heroColorCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'hero_color_key'`
+      );
+      if (heroColorCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE users ADD COLUMN hero_color_key VARCHAR(32) NOT NULL DEFAULT 'golden_hour'`);
+        console.log('Added hero_color_key column to users table');
+      }
+      await pool.query(`UPDATE users SET hero_color_key = 'golden_hour' WHERE hero_color_key IS NULL OR LENGTH(TRIM(hero_color_key)) = 0`);
+      await pool.query(`ALTER TABLE users ALTER COLUMN hero_color_key SET DEFAULT 'golden_hour'`);
+      await pool.query(`ALTER TABLE users ALTER COLUMN hero_color_key SET NOT NULL`);
+
       const changeCountCheck = await pool.query(
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'users' AND column_name = 'nickname_change_count'`
       );
@@ -147,6 +166,8 @@ async function createTables() {
           nickname VARCHAR(30) NOT NULL,
           email VARCHAR(255) UNIQUE NOT NULL,
           avatar_url TEXT,
+          background_image_url TEXT,
+          hero_color_key VARCHAR(32) NOT NULL DEFAULT 'golden_hour',
           password_hash VARCHAR(255) NOT NULL,
           nickname_change_count INT NOT NULL DEFAULT 0,
           nickname_changed_at TIMESTAMP,

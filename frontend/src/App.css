@@ -940,8 +940,12 @@
     linear-gradient(180deg, #fff9f3 0%, #f7f3ee 100%);
 }
 
-.profile-hero,
-.public-profile-hero {
+.public-profile-shell {
+  min-height: 100vh;
+  padding: 0 0 56px;
+}
+
+.profile-hero {
   max-width: 1180px;
   margin: 0 auto 28px;
   display: grid;
@@ -954,156 +958,222 @@
   box-shadow: 0 24px 80px rgba(42, 22, 10, 0.24);
 }
 
-.public-profile-hero-recipe {
+.public-profile-hero {
   position: relative;
-  min-height: clamp(360px, 54vh, 520px);
+  min-height: clamp(460px, 78vh, 860px);
+  width: 100%;
+  margin: 0 0 28px;
   overflow: hidden;
-  display: block;
+  display: flex;
+  justify-content: center;
   padding: 0;
-  background:
-    radial-gradient(circle at 14% 18%, rgba(223, 166, 87, 0.26), transparent 24%),
-    radial-gradient(circle at 86% 20%, rgba(102, 125, 138, 0.24), transparent 28%),
-    linear-gradient(135deg, #171b21 0%, #222129 42%, #33261f 100%);
+  background: #181818;
+  border-radius: 0;
+  box-shadow: none;
 }
 
-.public-profile-hero-gradient {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 18% 18%, rgba(239, 182, 97, 0.3), transparent 22%),
-    radial-gradient(circle at 80% 14%, rgba(114, 146, 161, 0.22), transparent 24%),
-    radial-gradient(circle at 50% 85%, rgba(128, 87, 58, 0.18), transparent 32%);
+.public-profile-hero-media {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  filter: brightness(0.62) saturate(1.12);
+}
+
+.public-profile-hero:hover .public-profile-hero-media {
+  transform: scale(1.04);
 }
 
 .public-profile-hero-fade {
-  position: absolute;
-  inset: 0;
   background:
-    linear-gradient(180deg, rgba(9, 10, 14, 0.18) 0%, rgba(9, 10, 14, 0.42) 38%, rgba(9, 10, 14, 0.88) 100%),
-    linear-gradient(90deg, rgba(14, 18, 24, 0.82) 0%, rgba(14, 18, 24, 0.38) 44%, rgba(14, 18, 24, 0.7) 100%);
+    linear-gradient(180deg,
+      rgba(0,0,0,0.35) 0%,
+      rgba(0,0,0,0.12) 40%,
+      rgba(0,0,0,0.60) 80%,
+      rgba(24,24,24,0.92) 100%
+    ),
+    radial-gradient(circle at 18% 18%, rgba(255, 213, 79, 0.14), transparent 22%);
 }
 
 .public-profile-hero-inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: clamp(360px, 54vh, 520px);
-  padding: 28px;
-}
-
-.public-profile-topline {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.public-profile-kicker,
-.public-profile-top-meta {
-  display: inline-flex;
-  align-items: center;
-  width: fit-content;
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(14px);
-}
-
-.public-profile-kicker {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #ffe1a5;
-}
-
-.public-profile-top-meta {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 248, 240, 0.82);
+  color: #fff;
 }
 
 .public-profile-identity {
+  margin-top: 18px;
   display: flex;
-  align-items: flex-end;
-  gap: 22px;
+  flex-direction: column;
+  align-items: flex-start;
 }
 
-.public-profile-avatar-wrap {
-  flex: 0 0 auto;
-}
-
-.public-profile-avatar-large {
-  width: 132px;
-  height: 132px;
-  border-radius: 28px;
-  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.3);
-}
-
-.public-profile-copy {
-  max-width: 720px;
-}
-
-.public-profile-copy h1 {
-  text-shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
-}
-
-.public-profile-cover-note {
-  display: inline-flex;
+.public-profile-hero-top {
+  width: 100%;
+  display: flex;
   align-items: center;
-  width: fit-content;
-  margin: 12px 0 0;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 245, 235, 0.78);
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
+  justify-content: space-between;
+  gap: 14px;
 }
 
-.public-profile-summary-on-hero {
-  max-width: 58ch;
+.public-profile-top-chip {
+  pointer-events: none;
+  cursor: default;
+  color: rgba(255,255,255,0.82);
+}
+
+.public-profile-author-strip {
+  margin-top: 0;
+}
+
+.public-profile-author-card {
+  pointer-events: none;
+}
+
+.public-profile-author-avatar {
+  width: 52px;
+  height: 52px;
+}
+
+.public-profile-title {
+  margin-top: 14px;
+  margin-bottom: 14px;
+}
+
+.public-profile-desc {
+  max-width: 640px;
+  margin: 0 0 22px;
 }
 
 .public-profile-pills {
-  display: flex;
-  flex-wrap: wrap;
+  margin-bottom: 0;
   gap: 12px;
 }
 
 .public-profile-pill {
+  position: relative;
+  min-width: 236px;
+  align-items: stretch;
+  padding: 10px 16px 10px 10px;
+  gap: 14px;
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08)),
+    rgba(18, 18, 18, 0.22);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 16px 38px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+}
+
+.public-profile-pill::after {
+  content: "";
+  position: absolute;
+  inset: auto 14px 8px 86px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 213, 79, 0.48), transparent);
+  opacity: 0.72;
+}
+
+.public-profile-pill:hover {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.12)),
+    rgba(18, 18, 18, 0.24);
+}
+
+.public-profile-pill-seal,
+.public-profile-pill-date {
+  position: relative;
+  z-index: 1;
+  width: 62px;
+  height: 58px;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  min-width: 150px;
-  padding: 14px 16px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(16px);
+  justify-content: center;
+  border-radius: 8px;
+  flex: 0 0 auto;
 }
 
-.public-profile-pill-icon {
-  font-size: 1.15rem;
+.public-profile-pill-seal {
+  background:
+    radial-gradient(circle at 26% 24%, rgba(255, 255, 255, 0.58), transparent 24%),
+    linear-gradient(145deg, #ffe28a 0%, #f8b94a 100%);
+  border: 1px solid rgba(255, 232, 165, 0.72);
+  color: #2b1b0b;
+  box-shadow: 0 10px 24px rgba(38, 24, 10, 0.24);
 }
 
-.public-profile-pill strong,
-.public-profile-pill small {
+.public-profile-pill-seal strong {
+  font-size: 1.65rem;
+  line-height: 1;
+  color: #2b1b0b;
+  font-weight: 900;
+}
+
+.public-profile-pill-seal::after {
+  content: "pub";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(43, 27, 11, 0.14);
+  color: rgba(43, 27, 11, 0.78);
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.public-profile-pill-date {
+  flex-direction: column;
+  gap: 1px;
+  background: rgba(255, 248, 240, 0.13);
+  border: 1px solid rgba(255, 248, 240, 0.28);
+  color: #fff8f0;
+  box-shadow: inset 0 10px 0 rgba(255, 213, 79, 0.24);
+}
+
+.public-profile-pill-date small,
+.public-profile-pill-date strong {
   display: block;
+  line-height: 1;
 }
 
-.public-profile-pill strong {
-  color: #fff7ed;
-  font-size: 1rem;
+.public-profile-pill-date small {
+  margin-top: 7px;
+  color: #ffe28a;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
-.public-profile-pill small {
-  color: rgba(255, 246, 237, 0.72);
-  font-size: 0.82rem;
+.public-profile-pill-date strong {
+  color: #fff8f0;
+  font-size: 1.42rem;
+  font-weight: 900;
+}
+
+.public-profile-pill-copy {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.public-profile-pill-copy strong {
+  color: #fff8f0;
+  font-size: 1.05rem;
+  line-height: 1.1;
+  font-weight: 850;
+}
+
+.public-profile-pill-copy small {
+  color: rgba(255, 248, 240, 0.68);
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .profile-avatar-wrap {
@@ -1284,6 +1354,117 @@
   margin-top: 12px;
 }
 
+.profile-hero-settings-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.profile-hero-settings-copy {
+  margin: 6px 0 0;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.profile-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #475467;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.profile-tier-badge-premium {
+  background: rgba(255, 213, 79, 0.16);
+  border-color: rgba(255, 213, 79, 0.34);
+  color: #9a6500;
+}
+
+.profile-hero-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 12px;
+}
+
+.profile-hero-swatch {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid rgba(214, 193, 160, 0.42);
+  background: rgba(255, 255, 255, 0.96);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.profile-hero-swatch:hover {
+  transform: translateY(-2px);
+  border-color: rgba(245, 158, 11, 0.42);
+  box-shadow: 0 14px 28px rgba(245, 158, 11, 0.12);
+}
+
+.profile-hero-swatch.is-selected {
+  border-color: rgba(245, 158, 11, 0.72);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.profile-hero-swatch-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.5 / 1;
+  border-radius: 14px;
+}
+
+.profile-hero-swatch-label {
+  color: #1f2937;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.profile-upload-label-banner {
+  min-height: 220px;
+}
+
+.profile-upload-preview-banner {
+  width: min(100%, 320px);
+  height: 160px;
+  border-radius: 18px;
+  object-fit: cover;
+  margin-bottom: 14px;
+  box-shadow: 0 14px 30px rgba(25, 33, 47, 0.18);
+}
+
+.profile-upload-preview-banner-fallback {
+  border: 1px solid rgba(255, 255, 255, 0.38);
+}
+
+.profile-upload-zone-locked {
+  margin-top: 2px;
+}
+
+.profile-upload-lock-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 22px 18px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(247, 248, 251, 0.96), rgba(255, 255, 255, 0.98));
+  border: 1px dashed rgba(148, 163, 184, 0.42);
+  color: #475467;
+  text-align: center;
+}
+
+.profile-upload-lock-card strong {
+  color: #111827;
+}
+
 .profile-card-head {
   margin-bottom: 6px;
 }
@@ -1307,37 +1488,6 @@
 
 .public-profile-recipe-card {
   height: 100%;
-}
-
-.public-profile-stat-row {
-  margin-top: 18px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.public-profile-stat {
-  min-width: 132px;
-  padding: 12px 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.public-profile-stat strong,
-.public-profile-stat span {
-  display: block;
-}
-
-.public-profile-stat strong {
-  font-size: 1.25rem;
-  color: #fff7ed;
-}
-
-.public-profile-stat span {
-  margin-top: 4px;
-  font-size: 0.88rem;
-  color: rgba(255, 244, 233, 0.72);
 }
 
 .public-profile-empty {
@@ -1477,8 +1627,7 @@
     grid-template-columns: 1fr;
   }
 
-  .profile-hero,
-  .public-profile-hero {
+  .profile-hero {
     grid-template-columns: 1fr;
     text-align: center;
   }
@@ -1488,26 +1637,21 @@
     justify-content: center;
   }
 
-  .public-profile-stat-row {
-    justify-content: center;
+  .profile-hero-settings-head {
+    flex-direction: column;
   }
 
   .public-profile-empty {
     grid-template-columns: 1fr;
   }
 
-  .public-profile-topline,
-  .public-profile-identity {
+  .public-profile-hero-top {
     flex-direction: column;
-    align-items: center;
-  }
-
-  .public-profile-topline {
-    justify-content: center;
+    align-items: flex-start;
   }
 
   .public-profile-pills {
-    justify-content: center;
+    justify-content: flex-start;
   }
 }
 
@@ -1516,12 +1660,21 @@
     padding: 92px 14px 42px;
   }
 
+  .public-profile-shell {
+    padding: 0 0 42px;
+  }
+
   .profile-hero,
   .public-profile-hero,
   .profile-card,
   .profile-recipes-section {
-    padding: 18px;
     border-radius: 22px;
+  }
+
+  .profile-hero,
+  .profile-card,
+  .profile-recipes-section {
+    padding: 18px;
   }
 
   .profile-avatar {
@@ -1531,18 +1684,32 @@
   }
 
   .public-profile-hero-inner {
-    padding: 20px;
+    width: min(100%, calc(100% - 28px));
+    padding-top: 88px;
+    padding-bottom: 24px;
   }
 
-  .public-profile-avatar-large {
-    width: 108px;
-    height: 108px;
-    border-radius: 24px;
+  .public-profile-top-chip {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  .public-profile-author-avatar {
+    width: 46px;
+    height: 46px;
   }
 
   .public-profile-pill {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .profile-tier-badge {
+    white-space: normal;
+  }
+
+  .profile-upload-preview-banner {
+    height: 136px;
   }
 
   .public-profile-placeholder-grid {

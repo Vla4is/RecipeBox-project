@@ -123,7 +123,7 @@ app.get("/api/me", requireAuth, async (req: AuthRequest, res: Response) => {
 
 app.put("/api/me/profile", requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, nickname, avatar_url } = req.body || {};
+    const { name, nickname, avatar_url, background_image_url, hero_color_key } = req.body || {};
     if (!name || !nickname) {
       return res.status(400).json({ error: "name and nickname are required" });
     }
@@ -132,6 +132,9 @@ app.put("/api/me/profile", requireAuth, async (req: AuthRequest, res: Response) 
       name: String(name),
       nickname: String(nickname),
       avatar_url: typeof avatar_url === "string" && avatar_url.trim() ? avatar_url : null,
+      background_image_url:
+        typeof background_image_url === "string" && background_image_url.trim() ? background_image_url : null,
+      hero_color_key: typeof hero_color_key === "string" ? hero_color_key : undefined,
     });
 
     return res.json({ success: true, profile });
@@ -141,6 +144,7 @@ app.put("/api/me/profile", requireAuth, async (req: AuthRequest, res: Response) 
 
     if (
       typedErr.code === "PROFILE_VALIDATION_ERROR" ||
+      typedErr.code === "PREMIUM_REQUIRED" ||
       typedErr.code === "NICKNAME_TAKEN" ||
       typedErr.code === "NICKNAME_CHANGE_LIMIT" ||
       typedErr.code === "NICKNAME_CHANGE_COOLDOWN"
@@ -194,7 +198,15 @@ app.get("/api/users/:nickname", async (req: Request, res: Response) => {
     }
 
     const recipes = await getPublicRecipesByUser(profile.userid);
-    return res.json({ profile, recipes });
+    const publicProfile = {
+      name: profile.name,
+      nickname: profile.nickname,
+      avatar_url: profile.avatar_url,
+      background_image_url: profile.background_image_url,
+      hero_color_key: profile.hero_color_key,
+      createdAt: profile.createdAt,
+    };
+    return res.json({ profile: publicProfile, recipes });
   } catch (err) {
     console.error("Error fetching public profile:", err);
     return res.status(500).json({ error: "Internal server error" });

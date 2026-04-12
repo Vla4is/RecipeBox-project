@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { processImage } from "./imageUpload";
+import { DEFAULT_HERO_COLOR_KEY, getProfileHeroTheme, PROFILE_HERO_THEMES } from "./profileHeroThemes";
 import "./App.css";
 
 type Profile = {
@@ -10,6 +11,8 @@ type Profile = {
   name: string;
   nickname: string;
   avatar_url: string | null;
+  background_image_url: string | null;
+  hero_color_key: string;
   nicknameChangeCount: number;
   nicknameChangedAt: string | null;
   isPremium: boolean;
@@ -42,7 +45,13 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
   const [savingPassword, setSavingPassword] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [passwordMessage, setPasswordMessage] = useState("");
-  const [form, setForm] = useState({ name: "", nickname: "", avatar_url: "" });
+  const [form, setForm] = useState({
+    name: "",
+    nickname: "",
+    avatar_url: "",
+    background_image_url: "",
+    hero_color_key: DEFAULT_HERO_COLOR_KEY,
+  });
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -71,6 +80,8 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
           name: nextProfile.name,
           nickname: nextProfile.nickname,
           avatar_url: nextProfile.avatar_url || "",
+          background_image_url: nextProfile.background_image_url || "",
+          hero_color_key: nextProfile.hero_color_key || DEFAULT_HERO_COLOR_KEY,
         });
       })
       .catch((err: Error) => setError(err.message || "Failed to load profile"))
@@ -92,6 +103,12 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
     setPasswordForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setError("");
     setPasswordMessage("");
+  };
+
+  const handleHeroColorChange = (heroColorKey: string) => {
+    setForm((prev) => ({ ...prev, hero_color_key: heroColorKey }));
+    setError("");
+    setProfileMessage("");
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,8 +139,52 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
     })();
   };
 
+  const handleBackgroundImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!profile?.isPremium) {
+      setError("Premium membership is required to change hero images");
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a valid image file");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Hero image must be smaller than 5MB");
+      return;
+    }
+
+    void (async () => {
+      try {
+        const processedBackgroundImage = await processImage(file, {
+          width: 1600,
+          height: 900,
+          quality: 0.82,
+        });
+        setForm((prev) => ({ ...prev, background_image_url: processedBackgroundImage }));
+      } catch {
+        setError("Failed to process hero image");
+      }
+    })();
+  };
+
   const clearAvatar = () => {
     setForm((prev) => ({ ...prev, avatar_url: "" }));
+    setError("");
+    setProfileMessage("");
+  };
+
+  const clearBackgroundImage = () => {
+    if (!profile?.isPremium) {
+      setError("Premium membership is required to change hero images");
+      return;
+    }
+
+    setForm((prev) => ({ ...prev, background_image_url: "" }));
     setError("");
     setProfileMessage("");
   };
@@ -145,6 +206,8 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
           name: form.name,
           nickname: form.nickname,
           avatar_url: form.avatar_url || null,
+          background_image_url: form.background_image_url || null,
+          hero_color_key: form.hero_color_key,
         }),
       });
 
@@ -163,6 +226,8 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
         name: body.profile.name,
         nickname: body.profile.nickname,
         avatar_url: body.profile.avatar_url || "",
+        background_image_url: body.profile.background_image_url || "",
+        hero_color_key: body.profile.hero_color_key || DEFAULT_HERO_COLOR_KEY,
       });
       setProfileMessage("Profile updated.");
     } catch (err: any) {
@@ -236,6 +301,9 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
   }
 
   if (!profile) return null;
+
+  const selectedHeroTheme = getProfileHeroTheme(form.hero_color_key);
+  const activeHeroImage = form.background_image_url || profile.background_image_url || "";
 
   return (
     <div className="profile-shell">
@@ -320,7 +388,7 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
                 </>
               ) : (
                 <>
-                  <span className="add-recipe-upload-icon">👤</span>
+                  <span className="add-recipe-upload-icon">AV</span>
                   <span className="add-recipe-upload-text">Click to upload avatar</span>
                   <span className="add-recipe-upload-hint">Square image works best</span>
                 </>
@@ -332,9 +400,97 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
                 onClick={clearAvatar}
                 className="add-recipe-clear-img profile-upload-clear-btn"
               >
-                ✕ Remove
+                Remove
               </button>
             ) : null}
+          </div>
+
+          <div className="profile-hero-settings-head">
+            <div>
+              <label className="auth-label">Public hero color</label>
+              <p className="profile-hero-settings-copy">
+                Everyone can choose the public profile color. Premium members can also replace it with a public hero image.
+              </p>
+            </div>
+            <span className={`profile-tier-badge ${profile.isPremium ? "profile-tier-badge-premium" : ""}`}>
+              {profile.isPremium ? "Premium image access" : "Solid colors only"}
+            </span>
+          </div>
+
+          <div className="profile-hero-swatch-grid" role="radiogroup" aria-label="Public hero color">
+            {PROFILE_HERO_THEMES.map((theme) => {
+              const isSelected = form.hero_color_key === theme.key;
+              return (
+                <button
+                  key={theme.key}
+                  type="button"
+                  className={`profile-hero-swatch ${isSelected ? "is-selected" : ""}`}
+                  onClick={() => handleHeroColorChange(theme.key)}
+                  aria-pressed={isSelected}
+                >
+                  <span
+                    className="profile-hero-swatch-preview"
+                    style={{ backgroundImage: theme.gradient, backgroundColor: theme.solid }}
+                  />
+                  <span className="profile-hero-swatch-label">{theme.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <label className="auth-label" htmlFor="profile-background-image">Public hero image</label>
+          <div className={`add-recipe-upload-zone profile-upload-zone ${!profile.isPremium ? "profile-upload-zone-locked" : ""}`}>
+            {profile.isPremium ? (
+              <>
+                <input
+                  id="profile-background-image"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBackgroundImageUpload}
+                  className="add-recipe-file-input"
+                />
+                <label htmlFor="profile-background-image" className="add-recipe-upload-label profile-upload-label profile-upload-label-banner">
+                  {activeHeroImage ? (
+                    <>
+                      <img src={activeHeroImage} alt="Public hero preview" className="profile-upload-preview-banner" />
+                      <span className="add-recipe-upload-text">Click to change public hero image</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="add-recipe-upload-icon">IMG</span>
+                      <span className="add-recipe-upload-text">Click to upload public hero image</span>
+                      <span className="add-recipe-upload-hint">Wide landscape image works best</span>
+                    </>
+                  )}
+                </label>
+                {form.background_image_url ? (
+                  <button
+                    type="button"
+                    onClick={clearBackgroundImage}
+                    className="add-recipe-clear-img profile-upload-clear-btn"
+                  >
+                    Remove
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <div className="profile-upload-lock-card">
+                {activeHeroImage ? (
+                  <img src={activeHeroImage} alt="Current public hero" className="profile-upload-preview-banner" />
+                ) : (
+                  <div
+                    className="profile-upload-preview-banner profile-upload-preview-banner-fallback"
+                    style={{ backgroundImage: selectedHeroTheme.gradient, backgroundColor: selectedHeroTheme.solid }}
+                  />
+                )}
+                <strong>Premium public hero image</strong>
+                <span>
+                  {profile.background_image_url
+                    ? "Your existing public hero image stays active, but changing it requires premium."
+                    : "Upgrade to premium to use a custom public hero image."}
+                </span>
+              </div>
+            )}
           </div>
 
           <button type="submit" className="auth-btn" disabled={savingProfile}>

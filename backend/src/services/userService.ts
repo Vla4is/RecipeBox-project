@@ -1,6 +1,7 @@
 import pool from "../database";
 import crypto from "crypto";
 import { isUserPremium } from "./subscriptionService";
+import { DEFAULT_HERO_COLOR_KEY, isHeroColorKey } from "../profileHeroThemes";
 
 // JWT helpers
 import jwt from "jsonwebtoken";
@@ -13,6 +14,8 @@ type UserRow = {
   email: string;
   password_hash: string;
   avatar_url?: string | null;
+  background_image_url?: string | null;
+  hero_color_key?: string | null;
   nickname_change_count?: number;
   nickname_changed_at?: Date | null;
   created_at: Date;
@@ -25,6 +28,8 @@ export interface UserProfile {
   name: string;
   nickname: string;
   avatar_url: string | null;
+  background_image_url: string | null;
+  hero_color_key: string;
   nicknameChangeCount: number;
   nicknameChangedAt: string | null;
   isPremium: boolean;
@@ -38,6 +43,8 @@ export interface PublicUserProfile {
   name: string;
   nickname: string;
   avatar_url: string | null;
+  background_image_url: string | null;
+  hero_color_key: string;
   createdAt: string;
 }
 
@@ -115,6 +122,8 @@ async function mapUserProfile(row: UserRow): Promise<UserProfile> {
     name: row.name,
     nickname: row.nickname,
     avatar_url: row.avatar_url ?? null,
+    background_image_url: row.background_image_url ?? null,
+    hero_color_key: row.hero_color_key || DEFAULT_HERO_COLOR_KEY,
     nicknameChangeCount: Number(row.nickname_change_count ?? 0),
     nicknameChangedAt: toIso(row.nickname_changed_at),
     isPremium: premium,
@@ -154,7 +163,7 @@ export async function createUser(name: string, email: string, password: string) 
   const res = await pool.query(
     `INSERT INTO users (name, nickname, email, password_hash)
      VALUES ($1, $2, $3, $4)
-     RETURNING userid, name, nickname, email, avatar_url, nickname_change_count, nickname_changed_at, created_at, updated_at`,
+     RETURNING userid, name, nickname, email, avatar_url, background_image_url, hero_color_key, nickname_change_count, nickname_changed_at, created_at, updated_at`,
     [name, nickname, email.toLowerCase(), stored]
   );
 
@@ -175,6 +184,8 @@ export async function authenticateUser(email: string, password: string) {
       name: user.name,
       nickname: user.nickname,
       avatar_url: user.avatar_url ?? null,
+      background_image_url: user.background_image_url ?? null,
+      hero_color_key: user.hero_color_key || DEFAULT_HERO_COLOR_KEY,
     },
   };
 }
@@ -194,13 +205,21 @@ export async function getPublicUserProfileByNickname(nickname: string): Promise<
     name: user.name,
     nickname: user.nickname,
     avatar_url: user.avatar_url ?? null,
+    background_image_url: user.background_image_url ?? null,
+    hero_color_key: user.hero_color_key || DEFAULT_HERO_COLOR_KEY,
     createdAt: new Date(user.created_at).toISOString(),
   };
 }
 
 export async function updateUserProfile(
   userid: string,
-  input: { name: string; nickname: string; avatar_url?: string | null }
+  input: {
+    name: string;
+    nickname: string;
+    avatar_url?: string | null;
+    background_image_url?: string | null;
+    hero_color_key?: string;
+  }
 ): Promise<UserProfile> {
   const current = await getUserById(userid);
   if (!current) {
@@ -221,6 +240,26 @@ export async function updateUserProfile(
     const err: any = new Error("nickname must be at least 3 characters and use only letters, numbers, or underscores");
     err.code = "PROFILE_VALIDATION_ERROR";
     throw err;
+  }
+
+  const nextHeroColorKey = input.hero_color_key?.trim() || current.hero_color_key || DEFAULT_HERO_COLOR_KEY;
+  if (!isHeroColorKey(nextHeroColorKey)) {
+    const err: any = new Error("hero_color_key is invalid");
+    err.code = "PROFILE_VALIDATION_ERROR";
+    throw err;
+  }
+
+  const nextBackgroundImage =
+    input.background_image_url === undefined ? current.background_image_url ?? null : input.background_image_url;
+  const backgroundImageChanged = nextBackgroundImage !== (current.background_image_url ?? null);
+
+  if (backgroundImageChanged) {
+    const premium = await isUserPremium(userid);
+    if (!premium) {
+      const err: any = new Error("Premium membership is required to change hero images");
+      err.code = "PREMIUM_REQUIRED";
+      throw err;
+    }
   }
 
   const nicknameChanged = normalizedNickname !== current.nickname;
@@ -258,11 +297,13 @@ export async function updateUserProfile(
      SET name = $1,
          nickname = $2,
          avatar_url = $3,
-         nickname_change_count = CASE WHEN $4 THEN COALESCE(nickname_change_count, 0) + 1 ELSE COALESCE(nickname_change_count, 0) END,
-         nickname_changed_at = CASE WHEN $4 THEN CURRENT_TIMESTAMP ELSE nickname_changed_at END,
+         background_image_url = $4,
+         hero_color_key = $5,
+         nickname_change_count = CASE WHEN $6 THEN COALESCE(nickname_change_count, 0) + 1 ELSE COALESCE(nickname_change_count, 0) END,
+         nickname_changed_at = CASE WHEN $6 THEN CURRENT_TIMESTAMP ELSE nickname_changed_at END,
          updated_at = CURRENT_TIMESTAMP
-     WHERE userid = $5::uuid`,
-    [trimmedName, normalizedNickname, input.avatar_url ?? null, nicknameChanged, userid]
+     WHERE userid = $7::uuid`,
+    [trimmedName, normalizedNickname, input.avatar_url ?? null, nextBackgroundImage, nextHeroColorKey, nicknameChanged, userid]
   );
 
   const updated = await getCurrentUserProfile(userid);

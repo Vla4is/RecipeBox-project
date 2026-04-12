@@ -2,13 +2,15 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useParams } from "react-router-dom";
 import RecipeGridCard from "./RecipeGridCard";
+import { getProfileHeroTheme } from "./profileHeroThemes";
 import "./App.css";
 
 type PublicProfile = {
-  userid: string;
   name: string;
   nickname: string;
   avatar_url: string | null;
+  background_image_url: string | null;
+  hero_color_key: string;
   createdAt: string;
 };
 
@@ -37,20 +39,16 @@ export default function PublicProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const handleBackToPrevious = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/", { replace: true });
+  };
+
   useEffect(() => {
-    if (!nickname) {
-      setError("Profile not found");
-      setLoading(false);
-      return;
-    }
-
-    if (!nickname.startsWith("@")) {
-      setError("Profile not found");
-      setLoading(false);
-      return;
-    }
-
-    const handle = nickname.slice(1).trim();
+    const handle = (nickname || "").replace(/^@/, "").trim();
     if (!handle) {
       setError("Profile not found");
       setLoading(false);
@@ -72,7 +70,7 @@ export default function PublicProfile() {
 
   if (loading) {
     return (
-      <div className="profile-shell">
+      <div className="profile-shell public-profile-shell">
         <div className="rd-state">
           <div className="rd-spinner" />
           <span>Loading profile...</span>
@@ -83,7 +81,7 @@ export default function PublicProfile() {
 
   if (error || !profile) {
     return (
-      <div className="profile-shell">
+      <div className="profile-shell public-profile-shell">
         <div className="rd-state">
           <p className="rd-state-msg">{error || "Profile not found"}</p>
         </div>
@@ -91,66 +89,92 @@ export default function PublicProfile() {
     );
   }
 
+  const heroTheme = getProfileHeroTheme(profile.hero_color_key);
+  const heroStyle = profile.background_image_url
+    ? { backgroundImage: `url(${profile.background_image_url})` }
+    : { backgroundImage: heroTheme.gradient, backgroundColor: heroTheme.solid };
+  const joinedDate = new Date(profile.createdAt);
+  const joinedDateLabel = joinedDate.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const joinedMonth = joinedDate.toLocaleDateString(undefined, { month: "short" });
+  const joinedDay = joinedDate.toLocaleDateString(undefined, { day: "numeric" });
+  const joinedYear = joinedDate.toLocaleDateString(undefined, { year: "numeric" });
+  const hasRecipes = recipes.length > 0;
+  const displayName = profile.name?.trim() || `@${profile.nickname}`;
+
   return (
-    <div className="profile-shell">
+    <div className="profile-shell public-profile-shell">
       <motion.section
-        className="public-profile-hero public-profile-hero-recipe"
+        className="rd-hero public-profile-hero"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.55 }}
       >
-        <div className="public-profile-hero-gradient" aria-hidden="true" />
-        <div className="public-profile-hero-fade" />
-        <div className="public-profile-hero-inner">
-          <div className="public-profile-topline">
-            <span className="public-profile-kicker">Cookbook Profile</span>
-            <span className="public-profile-top-meta">
-              Member since {new Date(profile.createdAt).toLocaleDateString()}
+        <div className="rd-hero-img public-profile-hero-media" style={heroStyle} aria-hidden="true" />
+        <div className="rd-hero-fade public-profile-hero-fade" />
+
+        <div className="rd-hero-inner public-profile-hero-inner">
+          <div className="rd-hero-top public-profile-hero-top">
+            <button
+              type="button"
+              className="rd-back rd-back-btn"
+              onClick={handleBackToPrevious}
+            >
+              <span className="rd-back-arrow">←</span> Community Recipes
+            </button>
+
+            <span className="rd-save-btn public-profile-top-chip" aria-label="Public profile">
+              Public profile
             </span>
           </div>
 
           <div className="public-profile-identity">
-            <div className="profile-avatar-wrap public-profile-avatar-wrap">
-              {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={profile.nickname} className="profile-avatar public-profile-avatar-large" />
-              ) : (
-                <div className="profile-avatar profile-avatar-fallback public-profile-avatar-large">
-                  {profile.nickname.slice(0, 2).toUpperCase()}
-                </div>
-              )}
+            <div className="rd-author-strip public-profile-author-strip">
+              <div className="rd-author-link public-profile-author-card">
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt={profile.nickname} className="rd-author-avatar public-profile-author-avatar" />
+                ) : (
+                  <span className="rd-author-avatar rd-author-avatar-fallback public-profile-author-avatar">
+                    {profile.nickname.slice(0, 2).toUpperCase()}
+                  </span>
+                )}
+                <span className="rd-author-copy">
+                  <span className="rd-author-label">Cookbook creator</span>
+                  <strong className="rd-author-nickname">@{profile.nickname}</strong>
+                </span>
+              </div>
             </div>
-            <div className="profile-hero-copy public-profile-copy">
-              <h1>{profile.name || `@${profile.nickname}`}</h1>
-              <p className="profile-handle">@{profile.nickname}</p>
-              <p className="public-profile-cover-note">Future cover customization area</p>
-              <p className="profile-public-summary public-profile-summary-on-hero">
-                {recipes.length > 0
-                  ? "A growing public cookbook from this community cook, collected in one recipe-style showcase."
-                  : "This profile is live and ready. The first public recipes will land here soon."}
-              </p>
-            </div>
-          </div>
 
-          <div className="public-profile-pills">
-            <div className="public-profile-pill">
-              <span className="public-profile-pill-icon">🍽️</span>
-              <div>
-                <strong>{recipes.length}</strong>
-                <small>Public recipes</small>
+            <h1 className="rd-title public-profile-title">{displayName}</h1>
+
+            <p className="rd-desc public-profile-desc">
+              {hasRecipes
+                ? `Explore ${recipes.length} public recipe${recipes.length === 1 ? "" : "s"} shared by @${profile.nickname}.`
+                : `@${profile.nickname} has not published recipes yet.`}
+            </p>
+
+            <div className="rd-pills public-profile-pills" aria-label="Profile stats">
+              <div className="rd-pill public-profile-pill">
+                <span className="rd-pill-icon public-profile-pill-seal" aria-hidden="true">
+                  <strong>{recipes.length}</strong>
+                </span>
+                <div className="public-profile-pill-copy">
+                  <small>Public recipes</small>
+                  <strong>{recipes.length === 1 ? "One dish shared" : "Shared cookbook"}</strong>
+                </div>
               </div>
-            </div>
-            <div className="public-profile-pill">
-              <span className="public-profile-pill-icon">👤</span>
-              <div>
-                <strong>{profile.avatar_url ? "Custom" : "Signature"}</strong>
-                <small>{profile.avatar_url ? "Avatar set" : "Monogram style"}</small>
-              </div>
-            </div>
-            <div className="public-profile-pill">
-              <span className="public-profile-pill-icon">📅</span>
-              <div>
-                <strong>{new Date(profile.createdAt).getFullYear()}</strong>
-                <small>Member since</small>
+              <div className="rd-pill public-profile-pill">
+                <span className="rd-pill-icon public-profile-pill-date" aria-hidden="true">
+                  <small>{joinedMonth}</small>
+                  <strong>{joinedDay}</strong>
+                </span>
+                <div className="public-profile-pill-copy">
+                  <small>Joined {joinedYear}</small>
+                  <strong>{joinedDateLabel}</strong>
+                </div>
               </div>
             </div>
           </div>
@@ -166,7 +190,7 @@ export default function PublicProfile() {
         {recipes.length === 0 ? (
           <div className="public-profile-empty">
             <div className="public-profile-empty-copy">
-              <span className="my-recipes-empty-icon">🍽️</span>
+              <span className="my-recipes-empty-icon">RC</span>
               <h3>No public recipes yet</h3>
               <p>
                 This cook has not published anything yet, but the profile is ready and the recipe shelf will appear here as soon as something goes public.
