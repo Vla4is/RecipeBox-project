@@ -127,9 +127,9 @@ export default function PublicProfile() {
               <span className="rd-back-arrow">←</span> Back
             </button>
 
-            <span className="rd-save-btn public-profile-top-chip" aria-label="Public profile">
+            {/* <span className="rd-save-btn public-profile-top-chip" aria-label="Public profile">
               Public profile
-            </span>
+            </span> */}
           </div>
 
           <div className="public-profile-identity">
@@ -147,7 +147,7 @@ export default function PublicProfile() {
                     {profile.nickname.slice(0, 2).toUpperCase()}
                   </span>
                 )}
-                <span className="rd-author-copy">
+                <span className="rd-author-copy ">
                   <span className="rd-author-label">Cookbook creator</span>
                   <span className="author-nickname-row">
                     <strong className="rd-author-nickname">@{profile.nickname}</strong>

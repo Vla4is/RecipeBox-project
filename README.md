@@ -94,22 +94,6 @@ See [frontend/README.md](frontend/README.md) for frontend-specific setup.
 
 The `shared/types` directory contains TypeScript interfaces shared between frontend and backend for type-safe API communication.
 
-## Environment Variables
-
-Create `.env.local` files in each package directory:
-
-### Backend (.env.local)
-```
-DATABASE_URL=postgresql://user:password@localhost/dbname
-NODE_ENV=development
-PORT=3000
-```
-
-### Frontend (.env.local)
-```
-VITE_API_URL=http://localhost:3000
-```
-
 ## XML Cookbook
 
 Open `http://localhost:3000/cookbook.xml` to view the printable cookbook generated from public recipes.
