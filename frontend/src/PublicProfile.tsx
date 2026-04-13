@@ -123,7 +123,7 @@ export default function PublicProfile() {
               className="rd-back rd-back-btn"
               onClick={handleBackToPrevious}
             >
-              <span className="rd-back-arrow">←</span> Community Recipes
+              <span className="rd-back-arrow">←</span> Back
             </button>
 
             <span className="rd-save-btn public-profile-top-chip" aria-label="Public profile">
@@ -132,7 +132,12 @@ export default function PublicProfile() {
           </div>
 
           <div className="public-profile-identity">
-            <div className="rd-author-strip public-profile-author-strip">
+            <motion.div
+              className="rd-author-strip public-profile-author-strip"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, delay: 0.12 }}
+            >
               <div className="rd-author-link public-profile-author-card">
                 {profile.avatar_url ? (
                   <img src={profile.avatar_url} alt={profile.nickname} className="rd-author-avatar public-profile-author-avatar" />
@@ -146,17 +151,35 @@ export default function PublicProfile() {
                   <strong className="rd-author-nickname">@{profile.nickname}</strong>
                 </span>
               </div>
-            </div>
+            </motion.div>
 
-            <h1 className="rd-title public-profile-title">{displayName}</h1>
+            <motion.h1
+              className="rd-title public-profile-title"
+              initial={{ opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.15 }}
+            >
+              {displayName}
+            </motion.h1>
 
-            <p className="rd-desc public-profile-desc">
+            <motion.p
+              className="rd-desc public-profile-desc"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45, delay: 0.28 }}
+            >
               {hasRecipes
                 ? `Explore ${recipes.length} public recipe${recipes.length === 1 ? "" : "s"} shared by @${profile.nickname}.`
                 : `@${profile.nickname} has not published recipes yet.`}
-            </p>
+            </motion.p>
 
-            <div className="rd-pills public-profile-pills" aria-label="Profile stats">
+            <motion.div
+              className="rd-pills public-profile-pills"
+              aria-label="Profile stats"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.38 }}
+            >
               <div className="rd-pill public-profile-pill">
                 <span className="rd-pill-icon public-profile-pill-seal" aria-hidden="true">
                   <strong>{recipes.length}</strong>
@@ -176,7 +199,7 @@ export default function PublicProfile() {
                   <strong>{joinedDateLabel}</strong>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </motion.section>
