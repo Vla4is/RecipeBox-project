@@ -45,6 +45,7 @@ export interface PublicUserProfile {
   avatar_url: string | null;
   background_image_url: string | null;
   hero_color_key: string;
+  isPremium: boolean;
   createdAt: string;
 }
 
@@ -199,6 +200,7 @@ export async function getCurrentUserProfile(userid: string): Promise<UserProfile
 export async function getPublicUserProfileByNickname(nickname: string): Promise<PublicUserProfile | null> {
   const user = await getUserByNickname(nickname);
   if (!user) return null;
+  const premium = await isUserPremium(user.userid);
 
   return {
     userid: user.userid,
@@ -207,6 +209,7 @@ export async function getPublicUserProfileByNickname(nickname: string): Promise<
     avatar_url: user.avatar_url ?? null,
     background_image_url: user.background_image_url ?? null,
     hero_color_key: user.hero_color_key || DEFAULT_HERO_COLOR_KEY,
+    isPremium: premium,
     createdAt: new Date(user.created_at).toISOString(),
   };
 }

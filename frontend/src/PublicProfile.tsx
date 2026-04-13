@@ -11,6 +11,7 @@ type PublicProfile = {
   avatar_url: string | null;
   background_image_url: string | null;
   hero_color_key: string;
+  isPremium: boolean;
   createdAt: string;
 };
 
@@ -148,7 +149,14 @@ export default function PublicProfile() {
                 )}
                 <span className="rd-author-copy">
                   <span className="rd-author-label">Cookbook creator</span>
-                  <strong className="rd-author-nickname">@{profile.nickname}</strong>
+                  <span className="author-nickname-row">
+                    <strong className="rd-author-nickname">@{profile.nickname}</strong>
+                    {profile.isPremium ? (
+                      <span className="premium-check-badge" aria-label="Premium member" title="Premium member">
+                        ✓
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
               </div>
             </motion.div>

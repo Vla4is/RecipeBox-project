@@ -204,6 +204,7 @@ app.get("/api/users/:nickname", async (req: Request, res: Response) => {
       avatar_url: profile.avatar_url,
       background_image_url: profile.background_image_url,
       hero_color_key: profile.hero_color_key,
+      isPremium: profile.isPremium,
       createdAt: profile.createdAt,
     };
     return res.json({ profile: publicProfile, recipes });

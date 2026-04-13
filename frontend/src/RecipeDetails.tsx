@@ -41,6 +41,7 @@ type RecipeDetailsResponse = {
     nickname: string;
     name: string;
     avatar_url: string | null;
+    isPremium: boolean;
   } | null;
   ingredients: Ingredient[];
   steps: Step[];
@@ -379,7 +380,14 @@ export default function RecipeDetails() {
                 )}
                 <span className="rd-author-copy">
                   <span className="rd-author-label">Added by</span>
-                  <strong className="rd-author-nickname">@{author.nickname}</strong>
+                  <span className="author-nickname-row">
+                    <strong className="rd-author-nickname">@{author.nickname}</strong>
+                    {author.isPremium ? (
+                      <span className="premium-check-badge" aria-label="Premium member" title="Premium member">
+                        ✓
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
               </Link>
             </motion.div>

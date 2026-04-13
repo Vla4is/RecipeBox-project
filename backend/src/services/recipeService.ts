@@ -23,6 +23,7 @@ export interface RecipeAuthor {
   nickname: string;
   name: string;
   avatar_url: string | null;
+  isPremium: boolean;
 }
 
 export type RecipeDietType = "NONE" | "VEGETARIAN" | "VEGAN";
@@ -261,7 +262,12 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
             u.userid AS author_userid,
             u.nickname AS author_nickname,
             u.name AS author_name,
-            u.avatar_url AS author_avatar_url
+            u.avatar_url AS author_avatar_url,
+            EXISTS (
+              SELECT 1
+              FROM subscriptions s
+              WHERE s.userid = u.userid AND s.subscription_end_date > NOW()
+            ) AS author_is_premium
      FROM recipes r
      LEFT JOIN users u ON u.userid = r.userid
      WHERE r.recipeid = $1 AND (r.visibility = 'PUBLIC' OR ($2::uuid IS NOT NULL AND r.userid = $2::uuid))`,
@@ -277,6 +283,7 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
     author_nickname: string | null;
     author_name: string | null;
     author_avatar_url: string | null;
+    author_is_premium: boolean;
   };
   const recipe: RecipeRow = {
     recipeid: row.recipeid,
@@ -329,6 +336,7 @@ export async function getRecipeDetails(recipeId: string, userid?: string): Promi
           nickname: row.author_nickname,
           name: row.author_name,
           avatar_url: row.author_avatar_url ?? null,
+          isPremium: Boolean(row.author_is_premium),
         }
       : null,
     ingredients: ingredientsRes.rows,
@@ -568,7 +576,12 @@ export async function getRecipeDetailsForOwner(recipeId: string, userid: string)
             u.userid AS author_userid,
             u.nickname AS author_nickname,
             u.name AS author_name,
-            u.avatar_url AS author_avatar_url
+            u.avatar_url AS author_avatar_url,
+            EXISTS (
+              SELECT 1
+              FROM subscriptions s
+              WHERE s.userid = u.userid AND s.subscription_end_date > NOW()
+            ) AS author_is_premium
      FROM recipes r
      LEFT JOIN users u ON u.userid = r.userid
      WHERE r.recipeid = $1 AND r.userid = $2`,
@@ -581,6 +594,7 @@ export async function getRecipeDetailsForOwner(recipeId: string, userid: string)
     author_nickname: string | null;
     author_name: string | null;
     author_avatar_url: string | null;
+    author_is_premium: boolean;
   };
   const recipe: RecipeRow = {
     recipeid: row.recipeid,
@@ -628,6 +642,7 @@ export async function getRecipeDetailsForOwner(recipeId: string, userid: string)
           nickname: row.author_nickname,
           name: row.author_name,
           avatar_url: row.author_avatar_url ?? null,
+          isPremium: Boolean(row.author_is_premium),
         }
       : null,
     ingredients: ingredientsRes.rows,
