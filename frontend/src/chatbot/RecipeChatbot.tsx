@@ -8,6 +8,18 @@ type ChatMessage = {
   role: ChatRole;
   content: string;
   createdAt?: string;
+  recommendations?: ChatRecommendation[];
+};
+
+type ChatRecommendation = {
+  recipeId: string;
+  title: string;
+  description: string | null;
+  imageUrl: string | null;
+  totalTime: number | null;
+  dietType: string | null;
+  difficulty: string | null;
+  href: string;
 };
 
 type ChatSession = {
@@ -24,7 +36,7 @@ type SseEvent = {
 };
 
 const INTRO_MESSAGE =
-  "Ask for substitutions, timing help, plating ideas, or ways to adapt this recipe to what you have.";
+  "Ask for substitutions, timing help, similar recipes, or ways to adapt this recipe to what you have.";
 
 function getToken(): string | null {
   return localStorage.getItem("jwt_token");
@@ -63,6 +75,14 @@ function parseSseBlock(block: string): SseEvent | null {
 
   if (dataLines.length === 0) return null;
   return { event, data: dataLines.join("\n") };
+}
+
+function getRecipeMeta(recipe: ChatRecommendation): string {
+  return [
+    recipe.totalTime == null ? null : `${recipe.totalTime} min`,
+    recipe.dietType && recipe.dietType !== "NONE" ? recipe.dietType.toLowerCase() : null,
+    recipe.difficulty ? recipe.difficulty.toLowerCase() : null,
+  ].filter(Boolean).join(" • ");
 }
 
 export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: string; recipeTitle: string }) {
@@ -218,9 +238,24 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
           const parsed = parseSseBlock(block);
           if (!parsed) continue;
 
-          const data = JSON.parse(parsed.data) as { text?: string; sessionId?: string; error?: string };
+          const data = JSON.parse(parsed.data) as {
+            text?: string;
+            sessionId?: string;
+            error?: string;
+            recipes?: ChatRecommendation[];
+          };
           if (parsed.event === "session" && data.sessionId) {
             setActiveSessionId(data.sessionId);
+          }
+          if (parsed.event === "recommendations" && Array.isArray(data.recipes)) {
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last?.role === "assistant") {
+                next[next.length - 1] = { ...last, recommendations: data.recipes };
+              }
+              return next;
+            });
           }
           if (parsed.event === "delta" && data.text) {
             setMessages((prev) => {
@@ -364,9 +399,37 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
                     messages.map((message, index) => (
                       <div
                         key={`${message.role}-${index}`}
-                        className={`recipe-chatbot-message recipe-chatbot-message-${message.role}`}
+                        className={`recipe-chatbot-message-wrap recipe-chatbot-message-wrap-${message.role}`}
                       >
-                        {message.content || (message.role === "assistant" ? "Thinking..." : "")}
+                        <div
+                          className={`recipe-chatbot-message recipe-chatbot-message-${message.role}`}
+                        >
+                          {message.content || (message.role === "assistant" ? "Thinking..." : "")}
+                        </div>
+                        {message.role === "assistant" && message.recommendations && message.recommendations.length > 0 ? (
+                          <div className="recipe-chatbot-recommendations" aria-label="Suggested recipes">
+                            <span>Suggested recipes</span>
+                            {message.recommendations.map((recipe) => (
+                              <button
+                                key={recipe.recipeId}
+                                type="button"
+                                className="recipe-chatbot-rec-card"
+                                onClick={() => navigate(recipe.href)}
+                              >
+                                {recipe.imageUrl ? (
+                                  <img src={recipe.imageUrl} alt="" />
+                                ) : (
+                                  <div className="recipe-chatbot-rec-image-fallback">Recipe</div>
+                                )}
+                                <div>
+                                  <strong>{recipe.title}</strong>
+                                  <small>{getRecipeMeta(recipe) || "Open recipe"}</small>
+                                  {recipe.description ? <p>{recipe.description}</p> : null}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ))
                   )}

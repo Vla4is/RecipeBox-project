@@ -52,12 +52,14 @@ import {
   chatbotRequiresPremium,
   getChatbotSessions,
   getOrCreateChatbotSession,
+  getChatbotSearchRecommendations,
   getRecentChatbotMessages,
   isChatbotEnabled,
   normalizeChatbotMessage,
   saveChatbotMessage,
   sendChatbotSseDone,
   sendChatbotSseError,
+  sendChatbotSseRecommendations,
   streamChatbotCompletion,
 } from "./services/chatbotService";
 import seedRecipes from "./seedRecipes";
@@ -499,7 +501,13 @@ app.post("/api/chatbot/recipes/:recipeId/messages", requireAuth, async (req: Aut
 
     await saveChatbotMessage({ sessionId, role: "user", content: message });
     const history = await getRecentChatbotMessages(sessionId);
-    const providerMessages = await buildProviderMessages({ details, history });
+    const recommendations = await getChatbotSearchRecommendations({
+      userId: req.user!.userid,
+      message,
+      details,
+    });
+    sendChatbotSseRecommendations(res, recommendations);
+    const providerMessages = await buildProviderMessages({ details, history, recommendations });
     const assistantMessage = await streamChatbotCompletion({
       messages: providerMessages,
       res,
