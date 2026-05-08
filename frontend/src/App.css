@@ -3773,11 +3773,22 @@
 .recipe-chatbot-history {
   margin: 10px 18px 0;
   max-height: min(360px, calc(100vh - 310px));
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.045);
+}
+
+.recipe-chatbot-panel-history-open .recipe-chatbot-history {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+.recipe-chatbot-panel-history-open .recipe-chatbot-messages {
+  flex: 0 1 210px;
+  min-height: 150px;
 }
 
 .recipe-chatbot-history-group {
@@ -4064,6 +4075,16 @@
 
   .recipe-chatbot-history {
     max-height: min(420px, calc(100vh - 300px));
+  }
+
+  .recipe-chatbot-panel-history-open .recipe-chatbot-history {
+    flex: initial;
+    max-height: min(420px, calc(100vh - 300px));
+  }
+
+  .recipe-chatbot-panel-history-open .recipe-chatbot-messages {
+    flex: 1;
+    min-height: 170px;
   }
 
   .recipe-chatbot-message {
