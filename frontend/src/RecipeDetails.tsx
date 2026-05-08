@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getRecipeDietBadge } from "./recipeDiet";
 import { getYouTubeEmbedUrl } from "./youtube";
+import RecipeChatbot from "./chatbot/RecipeChatbot";
 import "./App.css";
 
 type Recipe = {
@@ -650,6 +651,7 @@ export default function RecipeDetails() {
           )}
         </motion.section>
       </div>
+      <RecipeChatbot recipeId={recipe.recipeid} recipeTitle={recipe.title} />
     </div>
   );
 }

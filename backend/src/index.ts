@@ -47,6 +47,19 @@ import {
   cancelSubscription,
 } from "./services/subscriptionService";
 import { processPremiumCheckout } from "./services/billingService";
+import {
+  buildProviderMessages,
+  chatbotRequiresPremium,
+  getChatbotSessions,
+  getOrCreateChatbotSession,
+  getRecentChatbotMessages,
+  isChatbotEnabled,
+  normalizeChatbotMessage,
+  saveChatbotMessage,
+  sendChatbotSseDone,
+  sendChatbotSseError,
+  streamChatbotCompletion,
+} from "./services/chatbotService";
 import seedRecipes from "./seedRecipes";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
@@ -89,6 +102,19 @@ function getOptionalUser(req: Request): { userid: string; email?: string } | nul
   } catch {
     return null;
   }
+}
+
+function normalizeOptionalUuid(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmed)
+    ? trimmed
+    : undefined;
+}
+
+async function canUseChatbot(userId: string): Promise<boolean> {
+  if (!chatbotRequiresPremium()) return true;
+  return isUserPremium(userId);
 }
 // Login route must be after app is defined
 app.post("/api/login", async (req: Request, res: Response) => {
@@ -405,6 +431,94 @@ app.put("/api/recipes/:recipeId/rating", requireAuth, async (req: AuthRequest, r
     return res.json({ success: true, rating });
   } catch (err) {
     console.error("Error setting recipe rating:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/chatbot/recipes/:recipeId/history", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isChatbotEnabled()) {
+      return res.status(404).json({ error: "Chatbot is disabled" });
+    }
+
+    const allowed = await canUseChatbot(req.user!.userid);
+    if (!allowed) {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    const recipeId = req.params.recipeId as string;
+    const details = await getRecipeDetails(recipeId, req.user!.userid);
+    if (!details) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    const sessions = await getChatbotSessions(req.user!.userid, recipeId);
+    return res.json({ sessions });
+  } catch (err) {
+    console.error("Error fetching chatbot history:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/chatbot/recipes/:recipeId/messages", requireAuth, async (req: AuthRequest, res: Response) => {
+  if (!isChatbotEnabled()) {
+    return res.status(404).json({ error: "Chatbot is disabled" });
+  }
+
+  try {
+    const allowed = await canUseChatbot(req.user!.userid);
+    if (!allowed) {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    const recipeId = req.params.recipeId as string;
+    const message = normalizeChatbotMessage(req.body?.message);
+    const requestedSessionId = normalizeOptionalUuid(req.body?.sessionId);
+
+    if (!message) {
+      return res.status(400).json({ error: "message is required" });
+    }
+
+    const details = await getRecipeDetails(recipeId, req.user!.userid);
+    if (!details) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const sessionId = await getOrCreateChatbotSession({
+      userId: req.user!.userid,
+      recipeId,
+      sessionId: requestedSessionId,
+      firstMessage: message,
+    });
+
+    await saveChatbotMessage({ sessionId, role: "user", content: message });
+    const history = await getRecentChatbotMessages(sessionId);
+    const providerMessages = await buildProviderMessages({ details, history });
+    const assistantMessage = await streamChatbotCompletion({
+      messages: providerMessages,
+      res,
+      sessionId,
+    });
+
+    if (assistantMessage) {
+      await saveChatbotMessage({ sessionId, role: "assistant", content: assistantMessage });
+    }
+
+    sendChatbotSseDone(res, sessionId);
+    return res.end();
+  } catch (err) {
+    console.error("Error streaming chatbot response:", err);
+    const message = err instanceof Error ? err.message : "The cooking assistant is unavailable right now";
+    if (res.headersSent) {
+      sendChatbotSseError(res, message);
+      return res.end();
+    }
     return res.status(500).json({ error: "Internal server error" });
   }
 });

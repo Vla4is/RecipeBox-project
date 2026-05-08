@@ -514,6 +514,44 @@ async function createTables() {
       console.log('Payments table created successfully');
     }
 
+    if (await tableExists('chatbot_sessions')) {
+      console.log('Chatbot sessions table already exists, skipping creation');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_chatbot_sessions_user_recipe_updated ON chatbot_sessions(userid, recipeid, updated_at DESC)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_chatbot_sessions_expires ON chatbot_sessions(expires_at)`);
+    } else {
+      await pool.query(`
+        CREATE TABLE chatbot_sessions (
+          sessionid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
+          recipeid UUID NOT NULL REFERENCES recipes(recipeid) ON DELETE CASCADE,
+          title VARCHAR(120) NOT NULL DEFAULT 'Recipe chat',
+          expires_at TIMESTAMP NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await pool.query(`CREATE INDEX idx_chatbot_sessions_user_recipe_updated ON chatbot_sessions(userid, recipeid, updated_at DESC)`);
+      await pool.query(`CREATE INDEX idx_chatbot_sessions_expires ON chatbot_sessions(expires_at)`);
+      console.log('Chatbot sessions table created successfully');
+    }
+
+    if (await tableExists('chatbot_messages')) {
+      console.log('Chatbot messages table already exists, skipping creation');
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_chatbot_messages_session_created ON chatbot_messages(sessionid, created_at ASC)`);
+    } else {
+      await pool.query(`
+        CREATE TABLE chatbot_messages (
+          messageid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          sessionid UUID NOT NULL REFERENCES chatbot_sessions(sessionid) ON DELETE CASCADE,
+          role VARCHAR(16) NOT NULL CHECK (role IN ('user', 'assistant')),
+          content TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await pool.query(`CREATE INDEX idx_chatbot_messages_session_created ON chatbot_messages(sessionid, created_at ASC)`);
+      console.log('Chatbot messages table created successfully');
+    }
+
     // ensure shopping_list table
     if (await tableExists('shopping_list')) {
       console.log('Shopping list table already exists, skipping creation');
