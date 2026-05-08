@@ -55,6 +55,12 @@ type RecipeRatingSummary = {
   userRating: number | null;
 };
 
+const DEFAULT_RATING: RecipeRatingSummary = {
+  averageRating: 0,
+  totalRatings: 0,
+  userRating: null,
+};
+
 async function safeJson<T>(res: Response): Promise<T> {
   return res.json().catch(() => ({} as T));
 }
@@ -105,11 +111,7 @@ export default function RecipeDetails() {
   const [error, setError] = useState("");
   const [isSaved, setIsSaved] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [rating, setRating] = useState<RecipeRatingSummary>({
-    averageRating: 0,
-    totalRatings: 0,
-    userRating: null,
-  });
+  const [rating, setRating] = useState<RecipeRatingSummary>(DEFAULT_RATING);
   const [ratingLoading, setRatingLoading] = useState(false);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [isVideoOpen, setIsVideoOpen] = useState(false);
@@ -129,11 +131,24 @@ export default function RecipeDetails() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+
     window.scrollTo(0, 0);
+    setLoading(true);
+    setError("");
+    setData(null);
+    setIsVideoOpen(false);
+    setHoverRating(null);
+    setSaveLoading(false);
+    setRatingLoading(false);
+    setRating(DEFAULT_RATING);
+
     if (!recipeId) {
       setError("Recipe not found");
       setLoading(false);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     const token = localStorage.getItem("jwt_token");
@@ -143,6 +158,7 @@ export default function RecipeDetails() {
       .then(async (res) => {
         const body = await safeJson<RecipeDetailsResponse & { error?: string }>(res);
         if (!res.ok) throw new Error(body.error || "Failed to load recipe");
+        if (cancelled) return;
         setData(body);
         
         const token = localStorage.getItem("jwt_token");
@@ -176,16 +192,33 @@ export default function RecipeDetails() {
           }
         }
       })
-      .catch((err: Error) => setError(err.message || "Failed to load recipe"))
-      .finally(() => setLoading(false));
+      .catch((err: Error) => {
+        if (!cancelled) {
+          setError(err.message || "Failed to load recipe");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [recipeId]);
 
   useEffect(() => {
     if (!recipeId) return;
+    let cancelled = false;
+    setIsSaved(false);
+
     const token = localStorage.getItem("jwt_token");
     if (!token) {
       setIsSaved(false);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     fetch(`/api/saved-recipes/${recipeId}/status`, {
@@ -194,15 +227,23 @@ export default function RecipeDetails() {
       .then(async (res) => {
         if (!res.ok) return;
         const body = await safeJson<{ saved?: boolean }>(res);
-        setIsSaved(Boolean(body.saved));
+        if (!cancelled) {
+          setIsSaved(Boolean(body.saved));
+        }
       })
       .catch(() => {
         // Non-blocking for status indicator.
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [recipeId]);
 
   useEffect(() => {
     if (!recipeId) return;
+    let cancelled = false;
+    setRating(DEFAULT_RATING);
 
     const token = localStorage.getItem("jwt_token");
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -212,6 +253,7 @@ export default function RecipeDetails() {
         if (!res.ok) return;
         const body = await safeJson<{ rating?: RecipeRatingSummary }>(res);
         if (!body?.rating) return;
+        if (cancelled) return;
 
         setRating({
           averageRating: Number(body.rating.averageRating || 0),
@@ -222,6 +264,10 @@ export default function RecipeDetails() {
       .catch(() => {
         // Non-blocking for rating display.
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [recipeId]);
 
   const handleToggleSaved = async () => {

@@ -103,6 +103,20 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
   const token = useMemo(() => getToken(), [isOpen]);
   const activeSession = sessions.find((session) => session.sessionId === activeSessionId) || null;
 
+  useEffect(() => {
+    setIsOpen(false);
+    setIsHistoryOpen(false);
+    setSessions([]);
+    setActiveSessionId(null);
+    setMessages([]);
+    setDraft("");
+    setLoadingHistory(false);
+    setSending(false);
+    setLocked(false);
+    setDisabled(false);
+    setError("");
+  }, [recipeId]);
+
   const refreshHistory = async (selectLatest: boolean) => {
     const currentToken = getToken();
     if (!currentToken) {
