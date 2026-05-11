@@ -4514,6 +4514,201 @@
   cursor: not-allowed;
 }
 
+/* ===== CHAT HISTORY PAGE ===== */
+.chat-history-page {
+  min-height: 100vh;
+  padding: 104px 24px 56px;
+  background:
+    radial-gradient(circle at top left, rgba(255, 213, 79, 0.18) 0%, transparent 30%),
+    radial-gradient(circle at top right, rgba(100, 181, 246, 0.14) 0%, transparent 28%),
+    linear-gradient(135deg, #151820 0%, #181a28 50%, #101722 100%);
+}
+
+.chat-history-container {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.chat-history-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.chat-history-kicker {
+  margin: 0 0 8px;
+  color: #ffd54f;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chat-history-header h1,
+.chat-history-empty h1,
+.chat-history-empty h2 {
+  margin: 0;
+  color: #fff;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 800;
+}
+
+.chat-history-header h1 {
+  font-size: 38px;
+}
+
+.chat-history-header p,
+.chat-history-empty p {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-family: 'Inter', sans-serif;
+  line-height: 1.55;
+}
+
+.chat-history-header button,
+.chat-history-empty button {
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, #ffd54f 0%, #ffb300 100%);
+  color: #171105;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.chat-history-list {
+  display: grid;
+  gap: 14px;
+}
+
+.chat-history-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+
+.chat-history-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 213, 79, 0.36);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.chat-history-card img,
+.chat-history-image-fallback {
+  width: 124px;
+  height: 104px;
+  border-radius: 12px;
+  object-fit: cover;
+  display: block;
+}
+
+.chat-history-image-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 213, 79, 0.16);
+  color: #ffd54f;
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+}
+
+.chat-history-card-body {
+  min-width: 0;
+}
+
+.chat-history-card-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.46);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+}
+
+.chat-history-card-topline small {
+  white-space: nowrap;
+}
+
+.chat-history-card h2 {
+  margin: 0 0 5px;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.chat-history-card strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #ffd54f;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.chat-history-card p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.chat-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 80px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+
+.chat-history-empty span {
+  color: #ffd54f;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 680px) {
+  .chat-history-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chat-history-card {
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .chat-history-card img,
+  .chat-history-image-fallback {
+    width: 86px;
+    height: 86px;
+  }
+}
+
 /* ===== EDIT RECIPE EXTRAS ===== */
 .edit-recipe-btn-row {
   display: flex;

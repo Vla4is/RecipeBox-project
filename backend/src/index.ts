@@ -50,6 +50,8 @@ import { processPremiumCheckout } from "./services/billingService";
 import {
   buildProviderMessages,
   chatbotRequiresPremium,
+  getAllChatbotSessions,
+  getChatbotProviderSummary,
   getChatbotSessions,
   getOrCreateChatbotSession,
   getChatbotSearchRecommendations,
@@ -462,6 +464,25 @@ app.get("/api/chatbot/recipes/:recipeId/history", requireAuth, async (req: AuthR
     return res.json({ sessions });
   } catch (err) {
     console.error("Error fetching chatbot history:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/chatbot/history", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isChatbotEnabled()) {
+      return res.status(404).json({ error: "Chatbot is disabled" });
+    }
+
+    const allowed = await canUseChatbot(req.user!.userid);
+    if (!allowed) {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    const sessions = await getAllChatbotSessions(req.user!.userid);
+    return res.json({ sessions });
+  } catch (err) {
+    console.error("Error fetching global chatbot history:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -972,7 +993,11 @@ async function startServer() {
   try {
     await initializeDatabase();
     app.listen(PORT, () => {
+      const chatbotProvider = getChatbotProviderSummary();
       console.log(`Server running at http://localhost:${PORT}`);
+      console.log(
+        `Chatbot provider: ${chatbotProvider.provider} | model=${chatbotProvider.model || "missing"} | url=${chatbotProvider.apiUrl || "missing"} | enabled=${chatbotProvider.enabled} | apiKey=${chatbotProvider.hasApiKey ? "present" : "missing"}`
+      );
     });
   } catch (error) {
     console.error("Failed to start server:", error);

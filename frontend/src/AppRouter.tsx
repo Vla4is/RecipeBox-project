@@ -15,6 +15,7 @@ import Premium from "./Premium";
 import Billing from "./Billing";
 import MyProfile from "./MyProfile";
 import PublicProfile from "./PublicProfile";
+import ChatHistory from "./ChatHistory";
 import { getTokenExpiryMs, isTokenExpired } from "./auth";
 
 const SCROLL_POSITIONS_KEY = "itsystems_scroll_positions_v1";
@@ -143,6 +144,11 @@ export default function AppRouter() {
         <Route path="/my-profile" element={
           <RequireAuth loggedIn={!!token}>
             <MyProfile token={token!} onUnauthorized={handleLogout} />
+          </RequireAuth>
+        } />
+        <Route path="/chat-history" element={
+          <RequireAuth loggedIn={!!token}>
+            <ChatHistory token={token!} onUnauthorized={handleLogout} />
           </RequireAuth>
         } />
         <Route path="/edit-recipe/:recipeId" element={

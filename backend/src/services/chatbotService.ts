@@ -1,4 +1,6 @@
 import { Response } from "express";
+import path from "path";
+import dotenv from "dotenv";
 import pool from "../database";
 import { RecipeDetail } from "./recipeService";
 import { searchRecipes } from "./recipeSearchService";
@@ -20,6 +22,17 @@ export interface ChatbotSession {
   messages: ChatbotMessage[];
 }
 
+export interface ChatbotHistorySession {
+  sessionId: string;
+  recipeId: string;
+  recipeTitle: string;
+  recipeImageUrl: string | null;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+  latestPreview: string | null;
+}
+
 export interface ChatbotRecommendation {
   recipeId: string;
   title: string;
@@ -36,8 +49,30 @@ type ProviderMessage = {
   content: string;
 };
 
+type ChatbotProviderName = "DeepSeek" | "OpenAI" | "Unknown" | "Not configured";
+
+export interface ChatbotProviderSummary {
+  provider: ChatbotProviderName;
+  apiUrl: string | null;
+  model: string | null;
+  enabled: boolean;
+  hasApiKey: boolean;
+}
+
 const DEFAULT_SYSTEM_PROMPT =
   "You are RecipeBox's premium cooking assistant. Give concise, practical cooking advice based only on the recipe context and the user's question. If something is uncertain, say so clearly.";
+
+function reloadChatbotEnv(): void {
+  dotenv.config({
+    path: path.resolve(__dirname, "../../.env"),
+    override: true,
+  });
+}
+
+function normalizeEnvText(value: string | undefined): string {
+  if (!value) return "";
+  return value.replace(/\\n/g, "\n").trim();
+}
 
 function getEnvFlag(name: string, defaultValue: boolean): boolean {
   const value = process.env[name];
@@ -53,26 +88,66 @@ function getPositiveIntEnv(name: string, defaultValue: number): number {
 }
 
 export function isChatbotEnabled(): boolean {
+  reloadChatbotEnv();
   return getEnvFlag("CHATBOT_ENABLED", false);
 }
 
 export function chatbotRequiresPremium(): boolean {
+  reloadChatbotEnv();
   return getEnvFlag("CHATBOT_REQUIRE_PREMIUM", true);
 }
 
+export function getChatbotProviderSummary(): ChatbotProviderSummary {
+  reloadChatbotEnv();
+  const apiUrl = process.env.CHATBOT_API_URL?.trim() || null;
+  const apiKey = process.env.CHATBOT_API_KEY?.trim() || "";
+  const model = process.env.CHATBOT_MODEL?.trim() || null;
+  const enabled = isChatbotEnabled();
+  const hasApiKey = apiKey.length > 0;
+
+  if (!apiUrl || !hasApiKey || !model) {
+    return {
+      provider: "Not configured",
+      apiUrl,
+      model,
+      enabled,
+      hasApiKey,
+    };
+  }
+
+  const normalizedUrl = apiUrl.toLowerCase();
+  const provider = normalizedUrl.includes("api.deepseek.com")
+    ? "DeepSeek"
+    : normalizedUrl.includes("api.openai.com")
+      ? "OpenAI"
+      : "Unknown";
+
+  return {
+    provider,
+    apiUrl,
+    model,
+    enabled,
+    hasApiKey,
+  };
+}
+
 export function getChatbotHistoryDays(): number {
+  reloadChatbotEnv();
   return getPositiveIntEnv("CHATBOT_HISTORY_DAYS", 30);
 }
 
 export function getChatbotMaxUserMessageChars(): number {
+  reloadChatbotEnv();
   return getPositiveIntEnv("CHATBOT_MAX_USER_MESSAGE_CHARS", 1000);
 }
 
 function getChatbotMaxHistoryMessages(): number {
+  reloadChatbotEnv();
   return getPositiveIntEnv("CHATBOT_MAX_HISTORY_MESSAGES", 12);
 }
 
 function getChatbotSearchLimit(): number {
+  reloadChatbotEnv();
   return Math.min(getPositiveIntEnv("CHATBOT_SEARCH_LIMIT", 5), 8);
 }
 
@@ -179,6 +254,56 @@ export async function getChatbotSessions(userId: string, recipeId: string): Prom
     title: row.title,
     updatedAt: toIso(row.updated_at),
     messages: messagesBySession.get(row.sessionid) || [],
+  }));
+}
+
+export async function getAllChatbotSessions(userId: string): Promise<ChatbotHistorySession[]> {
+  await cleanupExpiredChatbotSessions();
+
+  const res = await pool.query(
+    `SELECT
+       s.sessionid,
+       s.recipeid,
+       s.title,
+       s.updated_at,
+       r.title AS recipe_title,
+       COALESCE(r.thumbnail_url, r.image_url) AS recipe_image_url,
+       COUNT(m.messageid)::int AS message_count,
+       LEFT(REGEXP_REPLACE(
+         COALESCE((ARRAY_AGG(m.content ORDER BY m.created_at DESC))[1], ''),
+         '\\s+',
+         ' ',
+         'g'
+       ), 180) AS latest_preview
+     FROM chatbot_sessions s
+     JOIN recipes r ON r.recipeid = s.recipeid
+     LEFT JOIN chatbot_messages m ON m.sessionid = s.sessionid
+     WHERE s.userid = $1::uuid
+       AND s.expires_at > NOW()
+     GROUP BY s.sessionid, s.recipeid, s.title, s.updated_at, r.title, r.thumbnail_url, r.image_url
+     ORDER BY s.updated_at DESC
+     LIMIT 50`,
+    [userId]
+  );
+
+  return res.rows.map((row: {
+    sessionid: string;
+    recipeid: string;
+    recipe_title: string;
+    recipe_image_url: string | null;
+    title: string;
+    updated_at: Date;
+    message_count: number;
+    latest_preview: string | null;
+  }) => ({
+    sessionId: row.sessionid,
+    recipeId: row.recipeid,
+    recipeTitle: row.recipe_title,
+    recipeImageUrl: row.recipe_image_url,
+    title: row.title,
+    updatedAt: toIso(row.updated_at),
+    messageCount: row.message_count,
+    latestPreview: row.latest_preview && row.latest_preview.trim() ? row.latest_preview.trim() : null,
   }));
 }
 
@@ -400,6 +525,7 @@ export async function getChatbotSearchRecommendations(input: {
 }
 
 function parseExampleMessages(): ProviderMessage[] {
+  reloadChatbotEnv();
   const raw = process.env.CHATBOT_EXAMPLES_JSON;
   if (!raw || raw.trim() === "") return [];
 
@@ -437,7 +563,8 @@ export async function buildProviderMessages(input: {
   history: ProviderMessage[];
   recommendations?: ChatbotRecommendation[];
 }): Promise<ProviderMessage[]> {
-  const systemPrompt = process.env.CHATBOT_SYSTEM_PROMPT?.trim() || DEFAULT_SYSTEM_PROMPT;
+  reloadChatbotEnv();
+  const systemPrompt = normalizeEnvText(process.env.CHATBOT_SYSTEM_PROMPT) || DEFAULT_SYSTEM_PROMPT;
   return [
     { role: "system", content: systemPrompt },
     ...parseExampleMessages(),
@@ -448,6 +575,7 @@ export async function buildProviderMessages(input: {
 }
 
 function getProviderConfig(): { apiUrl: string; apiKey: string; model: string } {
+  reloadChatbotEnv();
   const apiUrl = process.env.CHATBOT_API_URL?.trim();
   const apiKey = process.env.CHATBOT_API_KEY?.trim();
   const model = process.env.CHATBOT_MODEL?.trim();

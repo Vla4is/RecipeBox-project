@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -116,14 +116,18 @@ function renderAssistantContent(content: string): ReactNode {
 export default function RecipeChatbot({
   recipeId,
   recipeTitle,
+  initialSessionId,
   onUnauthorized,
 }: {
   recipeId: string;
   recipeTitle: string;
+  initialSessionId?: string | null;
   onUnauthorized?: () => void;
 }) {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const handledInitialSessionRef = useRef<string | null>(null);
+  const messagesLengthRef = useRef(0);
   const [isOpen, setIsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -135,11 +139,16 @@ export default function RecipeChatbot({
   const [locked, setLocked] = useState(false);
   const [error, setError] = useState("");
 
-  const token = useMemo(() => getToken(), [isOpen]);
+  const token = getToken();
   const activeSession = sessions.find((session) => session.sessionId === activeSessionId) || null;
 
   useEffect(() => {
-    setIsOpen(false);
+    messagesLengthRef.current = messages.length;
+  }, [messages.length]);
+
+  useEffect(() => {
+    handledInitialSessionRef.current = null;
+    setIsOpen(Boolean(initialSessionId));
     setIsHistoryOpen(false);
     setSessions([]);
     setActiveSessionId(null);
@@ -149,9 +158,15 @@ export default function RecipeChatbot({
     setSending(false);
     setLocked(false);
     setError("");
-  }, [recipeId]);
+  }, [recipeId, initialSessionId]);
 
-  const refreshHistory = async (selectLatest: boolean) => {
+  const refreshHistory = useCallback(async ({
+    selectLatest,
+    selectSessionId,
+  }: {
+    selectLatest: boolean;
+    selectSessionId?: string | null;
+  }) => {
     const currentToken = getToken();
     if (!currentToken) {
       setLocked(true);
@@ -189,6 +204,19 @@ export default function RecipeChatbot({
       setLocked(false);
       setSessions(nextSessions);
 
+      if (selectSessionId) {
+        const selectedSession = nextSessions.find((session) => session.sessionId === selectSessionId);
+        handledInitialSessionRef.current = selectSessionId;
+        if (selectedSession) {
+          setActiveSessionId(selectedSession.sessionId);
+          setMessages(selectedSession.messages || []);
+          return;
+        }
+        setActiveSessionId(null);
+        setMessages([]);
+        return;
+      }
+
       if (selectLatest && nextSessions.length > 0) {
         setActiveSessionId(nextSessions[0].sessionId);
         setMessages(nextSessions[0].messages || []);
@@ -198,12 +226,17 @@ export default function RecipeChatbot({
     } finally {
       setLoadingHistory(false);
     }
-  };
+  }, [navigate, onUnauthorized, recipeId]);
 
   useEffect(() => {
     if (!isOpen) return;
-    void refreshHistory(messages.length === 0);
-  }, [isOpen, recipeId]);
+    const shouldSelectInitial =
+      initialSessionId && handledInitialSessionRef.current !== initialSessionId;
+    void refreshHistory({
+      selectLatest: messagesLengthRef.current === 0 && !shouldSelectInitial,
+      selectSessionId: shouldSelectInitial ? initialSessionId : undefined,
+    });
+  }, [isOpen, recipeId, initialSessionId, refreshHistory]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -338,7 +371,7 @@ export default function RecipeChatbot({
         }
       }
 
-      await refreshHistory(false);
+      await refreshHistory({ selectLatest: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : "The assistant could not answer right now";
       setError(message);

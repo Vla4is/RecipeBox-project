@@ -121,6 +121,11 @@ export default function Navbar({ loggedIn, onLogout }: { loggedIn: boolean; onLo
             </NavLink>
           )}
           {loggedIn && (
+            <NavLink to="/chat-history" className={navLinkClassName} onClick={closeMenu}>
+              Chat History
+            </NavLink>
+          )}
+          {loggedIn && (
             <NavLink to="/add-recipe" className={navLinkClassName} onClick={closeMenu}>
               Add Recipe
             </NavLink>
