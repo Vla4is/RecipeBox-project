@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 type ChatRole = "user" | "assistant";
 
@@ -83,6 +83,34 @@ function getRecipeMeta(recipe: ChatRecommendation): string {
     recipe.dietType && recipe.dietType !== "NONE" ? recipe.dietType.toLowerCase() : null,
     recipe.difficulty ? recipe.difficulty.toLowerCase() : null,
   ].filter(Boolean).join(" • ");
+}
+
+function renderAssistantContent(content: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  const linkPattern = /\[([^\]\n]+)\]\((\/recipes\/[0-9a-fA-F-]{36})\)|(\/recipes\/[0-9a-fA-F-]{36})(?=[\s).,!?;:]|$)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkPattern.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(content.slice(lastIndex, match.index));
+    }
+
+    const href = match[2] || match[3];
+    const label = match[1] || "Open recipe";
+    nodes.push(
+      <Link key={`${href}-${match.index}`} to={href} className="recipe-chatbot-inline-link">
+        {label}
+      </Link>
+    );
+    lastIndex = linkPattern.lastIndex;
+  }
+
+  if (lastIndex < content.length) {
+    nodes.push(content.slice(lastIndex));
+  }
+
+  return nodes.length > 0 ? nodes : content;
 }
 
 export default function RecipeChatbot({
@@ -439,7 +467,13 @@ export default function RecipeChatbot({
                         <div
                           className={`recipe-chatbot-message recipe-chatbot-message-${message.role}`}
                         >
-                          {message.content || (message.role === "assistant" ? "Thinking..." : "")}
+                          {message.content
+                            ? message.role === "assistant"
+                              ? renderAssistantContent(message.content)
+                              : message.content
+                            : message.role === "assistant"
+                              ? "Thinking..."
+                              : ""}
                         </div>
                         {message.role === "assistant" && message.recommendations && message.recommendations.length > 0 ? (
                           <div className="recipe-chatbot-recommendations" aria-label="Suggested recipes">

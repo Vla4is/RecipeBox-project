@@ -537,6 +537,13 @@ async function createTables() {
 
     if (await tableExists('chatbot_messages')) {
       console.log('Chatbot messages table already exists, skipping creation');
+      const recommendationsCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'chatbot_messages' AND column_name = 'recommendations'`
+      );
+      if (recommendationsCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE chatbot_messages ADD COLUMN recommendations JSONB`);
+        console.log('Added recommendations column to chatbot_messages table');
+      }
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_chatbot_messages_session_created ON chatbot_messages(sessionid, created_at ASC)`);
     } else {
       await pool.query(`
@@ -545,6 +552,7 @@ async function createTables() {
           sessionid UUID NOT NULL REFERENCES chatbot_sessions(sessionid) ON DELETE CASCADE,
           role VARCHAR(16) NOT NULL CHECK (role IN ('user', 'assistant')),
           content TEXT NOT NULL,
+          recommendations JSONB,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);

@@ -3925,6 +3925,18 @@
   border-bottom-left-radius: 8px;
 }
 
+.recipe-chatbot-inline-link {
+  color: #8a5a00;
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.recipe-chatbot-inline-link:hover {
+  color: #5f3d00;
+}
+
 .recipe-chatbot-recommendations {
   width: min(100%, 330px);
   display: flex;

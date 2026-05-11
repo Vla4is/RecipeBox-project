@@ -519,7 +519,12 @@ app.post("/api/chatbot/recipes/:recipeId/messages", requireAuth, async (req: Aut
     });
 
     if (assistantMessage) {
-      await saveChatbotMessage({ sessionId, role: "assistant", content: assistantMessage });
+      await saveChatbotMessage({
+        sessionId,
+        role: "assistant",
+        content: assistantMessage,
+        recommendations,
+      });
     }
 
     sendChatbotSseDone(res, sessionId);

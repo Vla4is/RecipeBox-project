@@ -9,6 +9,7 @@ export interface ChatbotMessage {
   role: ChatbotRole;
   content: string;
   createdAt: string;
+  recommendations?: ChatbotRecommendation[];
 }
 
 export interface ChatbotSession {
@@ -90,6 +91,37 @@ function toIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+function normalizeStoredRecommendations(value: unknown): ChatbotRecommendation[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const recommendations = value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const candidate = item as Record<string, unknown>;
+      if (
+        typeof candidate.recipeId !== "string" ||
+        typeof candidate.title !== "string" ||
+        typeof candidate.href !== "string"
+      ) {
+        return null;
+      }
+
+      return {
+        recipeId: candidate.recipeId,
+        title: candidate.title,
+        description: typeof candidate.description === "string" ? candidate.description : null,
+        imageUrl: typeof candidate.imageUrl === "string" ? candidate.imageUrl : null,
+        totalTime: typeof candidate.totalTime === "number" ? candidate.totalTime : null,
+        dietType: typeof candidate.dietType === "string" ? candidate.dietType : null,
+        difficulty: typeof candidate.difficulty === "string" ? candidate.difficulty : null,
+        href: candidate.href,
+      };
+    })
+    .filter((item): item is ChatbotRecommendation => item !== null);
+
+  return recommendations.length > 0 ? recommendations : undefined;
+}
+
 export async function cleanupExpiredChatbotSessions(): Promise<void> {
   await pool.query(
     `DELETE FROM chatbot_sessions
@@ -113,7 +145,7 @@ export async function getChatbotSessions(userId: string, recipeId: string): Prom
 
   const sessionIds = sessionsRes.rows.map((row) => row.sessionid);
   const messagesRes = await pool.query(
-    `SELECT sessionid, role, content, created_at
+    `SELECT sessionid, role, content, recommendations, created_at
      FROM chatbot_messages
      WHERE sessionid = ANY($1::uuid[])
      ORDER BY created_at ASC`,
@@ -121,12 +153,22 @@ export async function getChatbotSessions(userId: string, recipeId: string): Prom
   );
 
   const messagesBySession = new Map<string, ChatbotMessage[]>();
-  for (const row of messagesRes.rows as Array<{ sessionid: string; role: ChatbotRole; content: string; created_at: Date }>) {
+  for (const row of messagesRes.rows as Array<{
+    sessionid: string;
+    role: ChatbotRole;
+    content: string;
+    recommendations: unknown;
+    created_at: Date;
+  }>) {
     const messages = messagesBySession.get(row.sessionid) || [];
+    const recommendations = row.role === "assistant"
+      ? normalizeStoredRecommendations(row.recommendations)
+      : undefined;
     messages.push({
       role: row.role,
       content: row.content,
       createdAt: toIso(row.created_at),
+      ...(recommendations ? { recommendations } : {}),
     });
     messagesBySession.set(row.sessionid, messages);
   }
@@ -181,11 +223,16 @@ export async function saveChatbotMessage(input: {
   sessionId: string;
   role: ChatbotRole;
   content: string;
+  recommendations?: ChatbotRecommendation[];
 }): Promise<void> {
+  const recommendations = input.role === "assistant" && input.recommendations?.length
+    ? JSON.stringify(input.recommendations)
+    : null;
+
   await pool.query(
-    `INSERT INTO chatbot_messages (sessionid, role, content)
-     VALUES ($1::uuid, $2, $3)`,
-    [input.sessionId, input.role, input.content]
+    `INSERT INTO chatbot_messages (sessionid, role, content, recommendations)
+     VALUES ($1::uuid, $2, $3, $4::jsonb)`,
+    [input.sessionId, input.role, input.content, recommendations]
   );
 
   await pool.query(
@@ -314,6 +361,7 @@ function formatRecommendationContext(recommendations: ChatbotRecommendation[]): 
     "Recipe catalog search results from the app database:",
     ...rows,
     "Only recommend these recipes when suggesting app links. Do not invent recipe links or recipe IDs.",
+    "When you mention a recommended recipe link in your reply, format it as Markdown: [Recipe title](/recipes/recipe-id).",
   ].join("\n\n");
 }
 
