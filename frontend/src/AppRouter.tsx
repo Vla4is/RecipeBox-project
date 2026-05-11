@@ -160,7 +160,7 @@ export default function AppRouter() {
             <Billing />
           </RequireAuth>
         } />
-        <Route path="/recipes/:recipeId" element={<RecipeDetails />} />
+        <Route path="/recipes/:recipeId" element={<RecipeDetails onUnauthorized={handleLogout} />} />
         <Route path="/:nickname" element={<PublicProfile />} />
       </Routes>
       <Footer />

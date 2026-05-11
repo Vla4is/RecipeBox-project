@@ -87,7 +87,11 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
     const decoded = jwt.verify(token, JWT_SECRET) as { userid: string; email?: string };
     req.user = decoded;
     return next();
-  } catch {
+  } catch (err) {
+    console.warn(
+      "JWT verification failed:",
+      err instanceof Error ? `${err.name}: ${err.message}` : err
+    );
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 }

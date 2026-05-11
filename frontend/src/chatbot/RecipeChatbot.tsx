@@ -85,7 +85,15 @@ function getRecipeMeta(recipe: ChatRecommendation): string {
   ].filter(Boolean).join(" • ");
 }
 
-export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: string; recipeTitle: string }) {
+export default function RecipeChatbot({
+  recipeId,
+  recipeTitle,
+  onUnauthorized,
+}: {
+  recipeId: string;
+  recipeTitle: string;
+  onUnauthorized?: () => void;
+}) {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -130,6 +138,11 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
       });
       const body = await res.json().catch(() => ({} as { error?: string; sessions?: ChatSession[] }));
 
+      if (res.status === 401) {
+        onUnauthorized?.();
+        navigate("/login");
+        return;
+      }
       if (res.status === 403) {
         setLocked(true);
         return;
@@ -223,6 +236,12 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
           sessionId: activeSessionId,
         }),
       });
+
+      if (res.status === 401) {
+        onUnauthorized?.();
+        navigate("/login");
+        return;
+      }
 
       if (res.status === 403) {
         setLocked(true);

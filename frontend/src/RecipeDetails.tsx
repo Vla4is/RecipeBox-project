@@ -103,7 +103,7 @@ const fadeUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
 };
 
-export default function RecipeDetails() {
+export default function RecipeDetails({ onUnauthorized }: { onUnauthorized?: () => void }) {
   const { recipeId } = useParams<{ recipeId: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<RecipeDetailsResponse | null>(null);
@@ -697,7 +697,7 @@ export default function RecipeDetails() {
           )}
         </motion.section>
       </div>
-      <RecipeChatbot recipeId={recipe.recipeid} recipeTitle={recipe.title} />
+      <RecipeChatbot recipeId={recipe.recipeid} recipeTitle={recipe.title} onUnauthorized={onUnauthorized} />
     </div>
   );
 }
