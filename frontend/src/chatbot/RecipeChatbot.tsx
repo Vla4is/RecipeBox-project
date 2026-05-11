@@ -97,7 +97,6 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [sending, setSending] = useState(false);
   const [locked, setLocked] = useState(false);
-  const [disabled, setDisabled] = useState(false);
   const [error, setError] = useState("");
 
   const token = useMemo(() => getToken(), [isOpen]);
@@ -113,7 +112,6 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
     setLoadingHistory(false);
     setSending(false);
     setLocked(false);
-    setDisabled(false);
     setError("");
   }, [recipeId]);
 
@@ -137,7 +135,9 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
         return;
       }
       if (res.status === 404) {
-        setDisabled(true);
+        setSessions([]);
+        setActiveSessionId(null);
+        setError(body.error || "Chat history is unavailable for this recipe");
         return;
       }
       if (!res.ok) {
@@ -146,7 +146,6 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
 
       const nextSessions = Array.isArray(body.sessions) ? body.sessions : [];
       setLocked(false);
-      setDisabled(false);
       setSessions(nextSessions);
 
       if (selectLatest && nextSessions.length > 0) {
@@ -231,6 +230,11 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
         return;
       }
 
+      if (res.status === 404) {
+        const body = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(body.error || "The assistant is unavailable for this recipe");
+      }
+
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({} as { error?: string }));
         throw new Error(body.error || "The assistant could not answer right now");
@@ -303,8 +307,6 @@ export default function RecipeChatbot({ recipeId, recipeTitle }: { recipeId: str
       setSending(false);
     }
   };
-
-  if (disabled) return null;
 
   return (
     <div className="recipe-chatbot">
