@@ -80,6 +80,12 @@ const NO_CODE_SYSTEM_PROMPT = [
   "Stay in the domain of food and cooking. Warm emoji or smilies are okay sparingly.",
 ].join("\n");
 
+const DRINK_PAIRING_SYSTEM_PROMPT = [
+  "Drink pairing rule: if the user asks what to drink with food, suggest drink names only.",
+  "Default to non-alcoholic drinks unless the user explicitly asks for alcohol, cocktails, wine, beer, or spirits.",
+  "Do not provide drink recipes, mixing steps, measurements, or cocktail instructions.",
+].join("\n");
+
 function reloadChatbotEnv(): void {
   dotenv.config({
     path: path.resolve(__dirname, "../../.env"),
@@ -1124,6 +1130,7 @@ export async function buildProviderMessages(input: {
   return [
     { role: "system", content: systemPrompt },
     { role: "system", content: NO_CODE_SYSTEM_PROMPT },
+    { role: "system", content: DRINK_PAIRING_SYSTEM_PROMPT },
     ...parseExampleMessages(),
     { role: "system", content: `Use this current page and recipe context:\n${formatRecipeContext(input.details)}` },
     ...(input.recommendations ? [{ role: "system" as const, content: formatRecommendationContext(input.recommendations) }] : []),
@@ -1141,6 +1148,7 @@ export async function buildGeneralProviderMessages(input: {
   return [
     { role: "system", content: systemPrompt },
     { role: "system", content: NO_CODE_SYSTEM_PROMPT },
+    { role: "system", content: DRINK_PAIRING_SYSTEM_PROMPT },
     ...parseExampleMessages(),
     {
       role: "system",
