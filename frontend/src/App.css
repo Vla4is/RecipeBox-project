@@ -3632,6 +3632,8 @@
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   color: #eef3fa;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .recipe-chatbot-head {
@@ -3823,6 +3825,9 @@
 .recipe-chatbot-messages {
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 213, 79, 0.48) rgba(255, 255, 255, 0.055);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .recipe-chatbot-history::-webkit-scrollbar,
@@ -4316,6 +4321,11 @@
 }
 
 @media (max-width: 600px) {
+  body.recipe-chatbot-body-locked {
+    overflow: hidden;
+    touch-action: none;
+  }
+
   .recipe-chatbot {
     left: 12px;
     right: 12px;
@@ -4335,6 +4345,7 @@
     right: 12px;
     bottom: 76px;
     width: auto;
+    height: calc(100dvh - 104px);
     max-height: calc(100vh - 104px);
     border-radius: 20px;
   }
@@ -4368,13 +4379,13 @@
   }
 
   .recipe-chatbot-panel-history-open .recipe-chatbot-history {
-    flex: initial;
-    max-height: min(420px, calc(100vh - 300px));
+    flex: 0 0 auto;
+    max-height: min(220px, 28dvh);
   }
 
   .recipe-chatbot-panel-history-open .recipe-chatbot-messages {
-    flex: 1;
-    min-height: 170px;
+    flex: 1 1 auto;
+    min-height: 260px;
   }
 
   .recipe-chatbot-message {

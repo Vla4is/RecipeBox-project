@@ -245,6 +245,13 @@ export default function RecipeChatbot({
   }, [messages.length]);
 
   useEffect(() => {
+    document.body.classList.toggle("recipe-chatbot-body-locked", isOpen);
+    return () => {
+      document.body.classList.remove("recipe-chatbot-body-locked");
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
     handledInitialSessionRef.current = null;
     setIsOpen(Boolean(initialSessionId));
     setIsHistoryOpen(false);
