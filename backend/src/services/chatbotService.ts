@@ -433,13 +433,22 @@ function formatRecipeContext(details: RecipeDetail): string {
   ].join("\n");
 }
 
+function normalizeRecipeSearchLanguage(message: string): string {
+  return message
+    .replace(/\b(turskih|turksih|turksh|turky|turkie|turkiye|turkey)\b/gi, "turkish")
+    .replace(/\b(wanna|want\s+to|wanting|looking\s+for)\b/gi, "want")
+    .replace(/\b(smth|sth)\b/gi, "something")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function shouldSearchRecipes(message: string): boolean {
-  const text = message.toLowerCase();
+  const text = normalizeRecipeSearchLanguage(message).toLowerCase();
   return /\b(similar|alternative|alternatives|recommend|recommendation|suggest|suggestion|find|search|look|show|browse|other|another|instead|else|options|ideas|dish|dishes|cook next|what can i cook|recipe like|recipes like|quick|easy|simpler|simple|vegan|vegetarian|turkish|turkiye|turkey|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|american|british|canadian|vietnamese|moroccan|egyptian|croatian|dutch|filipino|irish|jamaican|kenyan|malaysian|polish|portuguese|russian|tunisian)\b/.test(text);
 }
 
 function extractMaxTotalTime(message: string): number | undefined {
-  const text = message.toLowerCase();
+  const text = normalizeRecipeSearchLanguage(message).toLowerCase();
   const match = text.match(/\b(\d{1,3})\s*(?:min|mins|minute|minutes)\b/);
   if (match) {
     const minutes = Number(match[1]);
@@ -451,14 +460,14 @@ function extractMaxTotalTime(message: string): number | undefined {
 }
 
 function extractDietType(message: string): "VEGAN" | "VEGETARIAN" | undefined {
-  const text = message.toLowerCase();
+  const text = normalizeRecipeSearchLanguage(message).toLowerCase();
   if (/\bvegan\b/.test(text)) return "VEGAN";
   if (/\bvegetarian|veggie|meatless\b/.test(text)) return "VEGETARIAN";
   return undefined;
 }
 
 function extractDifficulties(message: string): Array<"EASY" | "MEDIUM" | "HARD"> | undefined {
-  const text = message.toLowerCase();
+  const text = normalizeRecipeSearchLanguage(message).toLowerCase();
   if (/\beasy|simple|beginner\b/.test(text)) return ["EASY"];
   if (/\bmedium|moderate\b/.test(text)) return ["MEDIUM"];
   if (/\bhard|advanced|challenging\b/.test(text)) return ["HARD"];
@@ -466,7 +475,8 @@ function extractDifficulties(message: string): Array<"EASY" | "MEDIUM" | "HARD">
 }
 
 function buildSearchTerm(message: string, details: RecipeDetail): string {
-  const lowerMessage = message.toLowerCase();
+  const normalizedMessage = normalizeRecipeSearchLanguage(message);
+  const lowerMessage = normalizedMessage.toLowerCase();
   const genericIntentOnly =
     /\b(similar|alternative|alternatives|other|another|instead|else|options|ideas|recommend|suggest|find|search)\b/.test(lowerMessage);
   const cuisineMatch = lowerMessage.match(/\b(turkish|turkiye|turkey|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|american|british|canadian|vietnamese|moroccan|egyptian|croatian|dutch|filipino|irish|jamaican|kenyan|malaysian|polish|portuguese|russian|tunisian)\b/);
@@ -483,7 +493,7 @@ function buildSearchTerm(message: string, details: RecipeDetail): string {
     return "";
   }
 
-  return message;
+  return normalizedMessage;
 }
 
 function normalizeSearchDecision(value: unknown): ChatbotSearchDecision | null {
@@ -547,12 +557,12 @@ function buildExpandedSearchTerms(input: {
 }): string[] {
   const terms = new Set<string>();
   const add = (term: string) => {
-    const normalized = term.trim().toLowerCase();
+    const normalized = normalizeRecipeSearchLanguage(term).trim().toLowerCase();
     if (normalized.length > 0) terms.add(normalized);
   };
   const combinedText = [
     input.decision.query,
-    input.message,
+    normalizeRecipeSearchLanguage(input.message),
     ...input.history.slice(-6).map((item) => item.content),
   ].join(" ").toLowerCase();
 
@@ -652,7 +662,7 @@ async function decideChatbotRecipeSearch(input: {
     if (!decision.shouldSearch) return { shouldSearch: false, query: "" };
     return {
       shouldSearch: true,
-      query: decision.query || fallback.query,
+      query: normalizeRecipeSearchLanguage(decision.query || fallback.query),
       ...(decision.maxTotalTime ? { maxTotalTime: decision.maxTotalTime } : fallback.maxTotalTime ? { maxTotalTime: fallback.maxTotalTime } : {}),
       ...(decision.dietType ? { dietType: decision.dietType } : fallback.dietType ? { dietType: fallback.dietType } : {}),
       ...(decision.difficulties?.length ? { difficulties: decision.difficulties } : fallback.difficulties?.length ? { difficulties: fallback.difficulties } : {}),
@@ -748,8 +758,8 @@ export async function getChatbotSearchRecommendations(input: {
 }
 
 function buildGeneralSearchTerm(message: string): string {
-  return message
-    .replace(/\b(i am|i'm|im|looking for|not sure|something|please|can you|could you|would you|recipe|recipes|food|cook|make|want|need)\b/gi, " ")
+  return normalizeRecipeSearchLanguage(message)
+    .replace(/\b(i am|i'm|im|hey|hello|hi|there|i|not sure|something|please|can you|could you|would you|recipe|recipes|food|cook|make|want|need)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
