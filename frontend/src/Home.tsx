@@ -219,6 +219,7 @@ function Home() {
   const [displayedSearchCount, setDisplayedSearchCount] = useState(SEARCH_INITIAL_VISIBLE);
   const [isSearchUiFocused, setIsSearchUiFocused] = useState(false);
   const gridContainerRef = useRef<HTMLDivElement>(null);
+  const recipesSectionRef = useRef<HTMLDivElement>(null);
   const searchLoadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const searchUiRef = useRef<HTMLDivElement>(null);
   const filterControlsRef = useRef<HTMLDivElement>(null);
@@ -376,6 +377,15 @@ function Home() {
   const handleTotalTimeChange = useCallback((value: number) => {
     setTotalTime(clamp(value, timeRanges.minTotalTime, timeRanges.maxTotalTime));
   }, [timeRanges.maxTotalTime, timeRanges.minTotalTime]);
+
+  const scrollToRecipes = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      recipesSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, []);
 
   const clearFilters = useCallback(() => {
     setSearchTerm("");
@@ -607,6 +617,7 @@ function Home() {
                   void runSearch();
                   e.currentTarget.blur();
                   setIsSearchUiFocused(false);
+                  scrollToRecipes();
                 }
               }}
             />
@@ -801,7 +812,7 @@ function Home() {
       </div>
 
       {/* Compact feed: search results or curated tag sections */}
-      <div className="home-section-intro">
+      <div ref={recipesSectionRef} className="home-section-intro">
         <div className="home-section-heading-wrap">
           <h2 className="section-heading">{showSearchResults ? "Matching Recipes" : "Top Picks by Category"}</h2>
           <p className="section-subheading">
