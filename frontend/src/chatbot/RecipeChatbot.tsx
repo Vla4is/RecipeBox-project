@@ -36,6 +36,7 @@ type SseEvent = {
 };
 
 const RECIPE_LINK_PATTERN = String.raw`\[([^\]\n]+)\]\s*\(\s*((?:https?:\/\/[^)\s]+)?\/recipes\/[A-Za-z0-9-]+)\s*\)`;
+const LOOSE_RECIPE_LINK_PATTERN = String.raw`(?:\[([^\]\n]+)\]|([^\[\]\n()]{2,120})\])\s*\(\s*((?:https?:\/\/[^)\s]+)?\/recipes\/[A-Za-z0-9-]+)\s*\)`;
 
 export type ChatbotContextConfig = {
   key: string;
@@ -161,7 +162,7 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
   });
 
   const inlinePattern = new RegExp(
-    `${RECIPE_LINK_PATTERN}|(\\*\\*([^*\\n]+)\\*\\*)|(\\*([^*\\n]+)\\*)|(<3|:-?\\)|:-?\\(|;-?\\)|:-?D)`,
+    `${LOOSE_RECIPE_LINK_PATTERN}|(\\*\\*([^*\\n]+)\\*\\*)|(\\*([^*\\n]+)\\*)|(<3|:-?\\)|:-?\\(|;-?\\)|:-?D)`,
     "g"
   );
   let lastIndex = 0;
@@ -172,18 +173,18 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
       nodes.push(safeContent.slice(lastIndex, match.index));
     }
 
-    if (match[1] && match[2]) {
+    if ((match[1] || match[2]) && match[3]) {
       nodes.push(
-        <Link key={`${keyPrefix}-link-${match.index}`} to={normalizeRecipeHref(match[2])} className="recipe-chatbot-inline-link">
-          {match[1]}
+        <Link key={`${keyPrefix}-link-${match.index}`} to={normalizeRecipeHref(match[3])} className="recipe-chatbot-inline-link">
+          {(match[1] || match[2]).trim().replace(/^[\s,.;:–—-]+/, "")}
         </Link>
       );
-    } else if (match[4]) {
-      nodes.push(<strong key={`${keyPrefix}-bold-${match.index}`}>{match[4]}</strong>);
-    } else if (match[6]) {
-      nodes.push(<em key={`${keyPrefix}-italic-${match.index}`}>{match[6]}</em>);
+    } else if (match[5]) {
+      nodes.push(<strong key={`${keyPrefix}-bold-${match.index}`}>{match[5]}</strong>);
     } else if (match[7]) {
-      nodes.push(smilieToEmoji(match[7]));
+      nodes.push(<em key={`${keyPrefix}-italic-${match.index}`}>{match[7]}</em>);
+    } else if (match[8]) {
+      nodes.push(smilieToEmoji(match[8]));
     }
 
     lastIndex = inlinePattern.lastIndex;
