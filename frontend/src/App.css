@@ -4086,8 +4086,19 @@
   padding-left: 19px;
 }
 
+.recipe-chatbot-rich-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-left: 18px;
+}
+
 .recipe-chatbot-rich-list li + li {
   margin-top: 4px;
+}
+
+.recipe-chatbot-rich-link-list li + li {
+  margin-top: 0;
 }
 
 .recipe-chatbot-rich-text strong {

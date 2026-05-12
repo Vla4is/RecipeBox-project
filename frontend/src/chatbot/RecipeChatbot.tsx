@@ -159,6 +159,7 @@ function renderAssistantContent(content: string): ReactNode {
     const line = lines[i];
     const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
     const numberedMatch = line.match(/^\s*\d+\.\s+(.+)$/);
+    const recipeLinkParagraphMatch = line.match(/^\s*\[[^\]\n]+\]\(\/recipes\/[0-9a-fA-F-]{36}\)\s*(?:[-–—:]\s*)?.+/);
 
     if (bulletMatch) {
       const items: ReactNode[] = [];
@@ -191,6 +192,23 @@ function renderAssistantContent(content: string): ReactNode {
       }
       i -= 1;
       blocks.push(<ol key={`ol-${i}`} className="recipe-chatbot-rich-list">{items}</ol>);
+      continue;
+    }
+
+    if (recipeLinkParagraphMatch) {
+      const items: ReactNode[] = [];
+      while (i < lines.length) {
+        const itemMatch = lines[i].match(/^\s*(\[[^\]\n]+\]\(\/recipes\/[0-9a-fA-F-]{36}\)\s*(?:[-–—:]\s*)?.+)/);
+        if (!itemMatch) break;
+        items.push(
+          <li key={`rec-link-item-${i}`}>
+            {renderInlineContent(itemMatch[1], `rec-link-${i}`)}
+          </li>
+        );
+        i += 1;
+      }
+      i -= 1;
+      blocks.push(<ul key={`rec-link-list-${i}`} className="recipe-chatbot-rich-list recipe-chatbot-rich-link-list">{items}</ul>);
       continue;
     }
 

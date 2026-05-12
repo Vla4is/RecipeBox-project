@@ -540,6 +540,46 @@ function buildFallbackSearchDecision(message: string, details: RecipeDetail): Ch
   };
 }
 
+function buildExpandedSearchTerms(input: {
+  decision: ChatbotSearchDecision;
+  message: string;
+  history: ProviderMessage[];
+}): string[] {
+  const terms = new Set<string>();
+  const add = (term: string) => {
+    const normalized = term.trim().toLowerCase();
+    if (normalized.length > 0) terms.add(normalized);
+  };
+  const combinedText = [
+    input.decision.query,
+    input.message,
+    ...input.history.slice(-6).map((item) => item.content),
+  ].join(" ").toLowerCase();
+
+  add(input.decision.query);
+
+  if (/\b(tabule|tabbouleh|tabouli|tabbouli|mjadara|mujadara|mujaddara|mjadra|mjaddara)\b/.test(combinedText)) {
+    add("turkish vegetarian");
+    add("turkish side");
+    add("salad");
+    add("lentil rice");
+    add("chickpea");
+  }
+
+  if (/\b(middle eastern|levant|levantine|lebanese|arabic)\b/.test(combinedText)) {
+    add("turkish");
+    add("turkish vegetarian");
+    add("turkish side");
+  }
+
+  if (/\bsimilar\b|\bsomething like\b|\bnearby\b|\balternative\b/.test(combinedText)) {
+    const cuisineMatch = combinedText.match(/\b(turkish|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|moroccan|egyptian|vietnamese)\b/);
+    if (cuisineMatch) add(cuisineMatch[1]);
+  }
+
+  return Array.from(terms).slice(0, 6);
+}
+
 async function callNonStreamingProvider(messages: ProviderMessage[], temperature = 0): Promise<string> {
   const { apiUrl, apiKey, model } = getProviderConfig();
   const providerRes = await fetch(apiUrl, {
@@ -591,6 +631,8 @@ async function decideChatbotRecipeSearch(input: {
           "Set shouldSearch=true when the user expresses a cuisine preference, dislikes the current cuisine, asks for easier/faster alternatives, or asks what they can cook with an ingredient.",
           "Set shouldSearch=false for pure cooking help about the current recipe, substitutions, technique, timing, or definitions, unless the user asks for another recipe.",
           "Preserve cuisine or ingredient words in query. Examples: Turkish/Turkiye -> turkish, chicken recipes -> chicken, any other recipe -> empty string.",
+          "Be flexible with dish spellings and nearby cuisines. Examples: tabule/tabbouleh -> salad, herb, vegetarian, Turkish/Middle Eastern style; mjadara/mujaddara -> lentil, rice, vegetarian, Turkish/Middle Eastern style.",
+          "For follow-ups like 'something similar', use recent user requests as context instead of only the currently open recipe.",
           "Never use the current recipe title as query unless the user explicitly asks for similar recipes.",
         ].join("\n"),
       },
@@ -623,7 +665,7 @@ async function decideChatbotRecipeSearch(input: {
 
 function formatRecommendationContext(recommendations: ChatbotRecommendation[]): string {
   if (recommendations.length === 0) {
-    return "Recipe catalog search results: no strong matches were found for this request.";
+    return "Recipe catalog search results: no exact or nearby matches were found for this request. Do not claim the entire catalog has no options; ask for one broader direction such as cuisine, ingredient, course, diet, or difficulty.";
   }
 
   const rows = recommendations.map((recipe, index) => {
@@ -663,16 +705,31 @@ export async function getChatbotSearchRecommendations(input: {
 
   if (!decision.shouldSearch) return [];
 
-  const results = await searchRecipes({
-    searchTerm: decision.query,
-    userid: input.userId,
-    maxTotalTime: decision.maxTotalTime,
-    dietType: decision.dietType,
-    difficulties: decision.difficulties,
-    limit: getChatbotSearchLimit() + 2,
+  const searchTerms = buildExpandedSearchTerms({
+    decision,
+    message: input.message,
+    history: input.history || [],
   });
+  const resultMap = new Map<string, Awaited<ReturnType<typeof searchRecipes>>[number]>();
 
-  return results
+  for (const searchTerm of searchTerms) {
+    const results = await searchRecipes({
+      searchTerm,
+      userid: input.userId,
+      maxTotalTime: decision.maxTotalTime,
+      dietType: decision.dietType,
+      difficulties: decision.difficulties,
+      limit: getChatbotSearchLimit() + 2,
+    });
+
+    for (const recipe of results) {
+      resultMap.set(recipe.recipeid, recipe);
+    }
+
+    if (resultMap.size >= getChatbotSearchLimit()) break;
+  }
+
+  return Array.from(resultMap.values())
     .filter((recipe) => recipe.recipeid !== input.details.recipe.recipeid)
     .slice(0, getChatbotSearchLimit())
     .map((recipe) => {
