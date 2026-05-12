@@ -535,6 +535,7 @@ app.post("/api/chatbot/recipes/:recipeId/messages", requireAuth, async (req: Aut
       userId: req.user!.userid,
       message,
       details,
+      history,
     });
     sendChatbotSseRecommendations(res, recommendations);
     const providerMessages = await buildProviderMessages({ details, history, recommendations });

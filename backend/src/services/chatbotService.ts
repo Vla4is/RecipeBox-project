@@ -49,6 +49,14 @@ type ProviderMessage = {
   content: string;
 };
 
+type ChatbotSearchDecision = {
+  shouldSearch: boolean;
+  query: string;
+  maxTotalTime?: number;
+  dietType?: "VEGAN" | "VEGETARIAN";
+  difficulties?: Array<"EASY" | "MEDIUM" | "HARD">;
+};
+
 type ChatbotProviderName = "DeepSeek" | "OpenAI" | "Unknown" | "Not configured";
 
 export interface ChatbotProviderSummary {
@@ -420,7 +428,7 @@ function formatRecipeContext(details: RecipeDetail): string {
 
 function shouldSearchRecipes(message: string): boolean {
   const text = message.toLowerCase();
-  return /\b(similar|alternative|alternatives|recommend|recommendation|suggest|suggestion|find|search|other|another|instead|else|options|ideas|cook next|what can i cook|recipe like|recipes like|quick|vegan|vegetarian)\b/.test(text);
+  return /\b(similar|alternative|alternatives|recommend|recommendation|suggest|suggestion|find|search|look|show|browse|other|another|instead|else|options|ideas|dish|dishes|cook next|what can i cook|recipe like|recipes like|quick|easy|simpler|simple|vegan|vegetarian|turkish|turkiye|turkey|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|american|british|canadian|vietnamese|moroccan|egyptian|croatian|dutch|filipino|irish|jamaican|kenyan|malaysian|polish|portuguese|russian|tunisian)\b/.test(text);
 }
 
 function extractMaxTotalTime(message: string): number | undefined {
@@ -454,12 +462,156 @@ function buildSearchTerm(message: string, details: RecipeDetail): string {
   const lowerMessage = message.toLowerCase();
   const genericIntentOnly =
     /\b(similar|alternative|alternatives|other|another|instead|else|options|ideas|recommend|suggest|find|search)\b/.test(lowerMessage);
+  const cuisineMatch = lowerMessage.match(/\b(turkish|turkiye|turkey|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|american|british|canadian|vietnamese|moroccan|egyptian|croatian|dutch|filipino|irish|jamaican|kenyan|malaysian|polish|portuguese|russian|tunisian)\b/);
 
-  if (genericIntentOnly) {
+  if (cuisineMatch) {
+    return cuisineMatch[1] === "turkiye" || cuisineMatch[1] === "turkey" ? "turkish" : cuisineMatch[1];
+  }
+
+  if (genericIntentOnly && !/\b(any|all|whatever|random|different)\b/.test(lowerMessage)) {
     return [details.recipe.title, ...details.tags.slice(0, 4)].filter(Boolean).join(" ");
   }
 
+  if (genericIntentOnly) {
+    return "";
+  }
+
   return message;
+}
+
+function normalizeSearchDecision(value: unknown): ChatbotSearchDecision | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  const shouldSearch = candidate.shouldSearch === true;
+  const query = typeof candidate.query === "string" ? candidate.query.trim().slice(0, 120) : "";
+  const maxTotalTime = typeof candidate.maxTotalTime === "number" && Number.isFinite(candidate.maxTotalTime) && candidate.maxTotalTime > 0
+    ? Math.min(Math.round(candidate.maxTotalTime), 300)
+    : undefined;
+  const dietType = candidate.dietType === "VEGAN" || candidate.dietType === "VEGETARIAN"
+    ? candidate.dietType
+    : undefined;
+  const difficulties = Array.isArray(candidate.difficulties)
+    ? candidate.difficulties.filter((item): item is "EASY" | "MEDIUM" | "HARD" =>
+        item === "EASY" || item === "MEDIUM" || item === "HARD"
+      )
+    : undefined;
+
+  return {
+    shouldSearch,
+    query,
+    ...(maxTotalTime ? { maxTotalTime } : {}),
+    ...(dietType ? { dietType } : {}),
+    ...(difficulties && difficulties.length > 0 ? { difficulties } : {}),
+  };
+}
+
+function parseDecisionJson(content: string): ChatbotSearchDecision | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const jsonText = fenced?.[1] || trimmed.match(/\{[\s\S]*\}/)?.[0] || trimmed;
+
+  try {
+    return normalizeSearchDecision(JSON.parse(jsonText));
+  } catch {
+    return null;
+  }
+}
+
+function buildFallbackSearchDecision(message: string, details: RecipeDetail): ChatbotSearchDecision {
+  if (!shouldSearchRecipes(message)) {
+    return { shouldSearch: false, query: "" };
+  }
+
+  return {
+    shouldSearch: true,
+    query: buildSearchTerm(message, details),
+    ...(extractMaxTotalTime(message) ? { maxTotalTime: extractMaxTotalTime(message) } : {}),
+    ...(extractDietType(message) ? { dietType: extractDietType(message) } : {}),
+    ...(extractDifficulties(message) ? { difficulties: extractDifficulties(message) } : {}),
+  };
+}
+
+async function callNonStreamingProvider(messages: ProviderMessage[], temperature = 0): Promise<string> {
+  const { apiUrl, apiKey, model } = getProviderConfig();
+  const providerRes = await fetch(apiUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+      temperature,
+    }),
+  });
+
+  if (!providerRes.ok) {
+    const providerText = await providerRes.text().catch(() => "");
+    throw new Error(`Chatbot search decider failed: ${providerRes.status} ${providerText.slice(0, 240)}`);
+  }
+
+  const payload = await providerRes.json() as {
+    choices?: Array<{
+      message?: { content?: unknown };
+      delta?: { content?: unknown };
+    }>;
+  };
+
+  return extractDelta(payload).trim();
+}
+
+async function decideChatbotRecipeSearch(input: {
+  message: string;
+  details: RecipeDetail;
+  history: ProviderMessage[];
+}): Promise<ChatbotSearchDecision> {
+  const fallback = buildFallbackSearchDecision(input.message, input.details);
+  const recentHistory = input.history.slice(-6);
+
+  try {
+    const content = await callNonStreamingProvider([
+      {
+        role: "system",
+        content: [
+          "You decide whether RecipeBox should search its recipe database before answering.",
+          "Return strict JSON only, with no markdown and no commentary.",
+          "Schema: {\"shouldSearch\": boolean, \"query\": string, \"maxTotalTime\"?: number, \"dietType\"?: \"VEGAN\" | \"VEGETARIAN\", \"difficulties\"?: [\"EASY\" | \"MEDIUM\" | \"HARD\"]}.",
+          "Set shouldSearch=true when the user asks to find, look for, show, browse, recommend, compare, or switch to another recipe/dish/cuisine.",
+          "Set shouldSearch=true when the user expresses a cuisine preference, dislikes the current cuisine, asks for easier/faster alternatives, or asks what they can cook with an ingredient.",
+          "Set shouldSearch=false for pure cooking help about the current recipe, substitutions, technique, timing, or definitions, unless the user asks for another recipe.",
+          "Preserve cuisine or ingredient words in query. Examples: Turkish/Turkiye -> turkish, chicken recipes -> chicken, any other recipe -> empty string.",
+          "Never use the current recipe title as query unless the user explicitly asks for similar recipes.",
+        ].join("\n"),
+      },
+      {
+        role: "system",
+        content: `Current recipe context:\n${formatRecipeContext(input.details)}`,
+      },
+      ...recentHistory,
+      {
+        role: "user",
+        content: input.message,
+      },
+    ]);
+
+    const decision = parseDecisionJson(content);
+    if (!decision) return fallback;
+    if (!decision.shouldSearch) return { shouldSearch: false, query: "" };
+    return {
+      shouldSearch: true,
+      query: decision.query || fallback.query,
+      ...(decision.maxTotalTime ? { maxTotalTime: decision.maxTotalTime } : fallback.maxTotalTime ? { maxTotalTime: fallback.maxTotalTime } : {}),
+      ...(decision.dietType ? { dietType: decision.dietType } : fallback.dietType ? { dietType: fallback.dietType } : {}),
+      ...(decision.difficulties?.length ? { difficulties: decision.difficulties } : fallback.difficulties?.length ? { difficulties: fallback.difficulties } : {}),
+    };
+  } catch (err) {
+    console.warn("Falling back to deterministic chatbot search decision:", err instanceof Error ? err.message : err);
+    return fallback;
+  }
 }
 
 function formatRecommendationContext(recommendations: ChatbotRecommendation[]): string {
@@ -494,15 +646,22 @@ export async function getChatbotSearchRecommendations(input: {
   userId: string;
   message: string;
   details: RecipeDetail;
+  history?: ProviderMessage[];
 }): Promise<ChatbotRecommendation[]> {
-  if (!shouldSearchRecipes(input.message)) return [];
+  const decision = await decideChatbotRecipeSearch({
+    message: input.message,
+    details: input.details,
+    history: input.history || [],
+  });
+
+  if (!decision.shouldSearch) return [];
 
   const results = await searchRecipes({
-    searchTerm: buildSearchTerm(input.message, input.details),
+    searchTerm: decision.query,
     userid: input.userId,
-    maxTotalTime: extractMaxTotalTime(input.message),
-    dietType: extractDietType(input.message),
-    difficulties: extractDifficulties(input.message),
+    maxTotalTime: decision.maxTotalTime,
+    dietType: decision.dietType,
+    difficulties: decision.difficulties,
     limit: getChatbotSearchLimit() + 2,
   });
 
