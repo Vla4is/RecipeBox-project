@@ -281,7 +281,7 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
 
   if (loading) {
     return (
-      <div className="profile-shell">
+      <div className="profile-shell my-profile-shell">
         <div className="rd-state">
           <div className="rd-spinner" />
           <span>Loading profile...</span>
@@ -292,7 +292,7 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
 
   if (error && !profile) {
     return (
-      <div className="profile-shell">
+      <div className="profile-shell my-profile-shell">
         <div className="rd-state">
           <p className="rd-state-msg">{error}</p>
         </div>
@@ -304,42 +304,87 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
 
   const selectedHeroTheme = getProfileHeroTheme(form.hero_color_key);
   const activeHeroImage = form.background_image_url || profile.background_image_url || "";
+  const displayInitials = (profile.nickname || profile.name || "ME").slice(0, 2).toUpperCase();
+  const joinedDate = new Date(profile.createdAt).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 
   return (
-    <div className="profile-shell">
+    <div className="profile-shell my-profile-shell">
       <motion.section
-        className="profile-hero"
+        className="profile-hero my-profile-overview"
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
       >
-        <div className="profile-avatar-wrap">
-          {form.avatar_url ? (
-            <img src={form.avatar_url} alt={profile.nickname} className="profile-avatar" />
-          ) : (
-            <div className="profile-avatar profile-avatar-fallback">
-              {profile.nickname.slice(0, 2).toUpperCase()}
-            </div>
-          )}
+        <div className="my-profile-overview-glow" style={{ background: selectedHeroTheme.glow }} aria-hidden="true" />
+        <div className="profile-avatar-wrap my-profile-avatar-wrap">
+          <div className="my-profile-avatar-frame">
+            {form.avatar_url ? (
+              <img src={form.avatar_url} alt={profile.nickname} className="profile-avatar" />
+            ) : (
+              <div className="profile-avatar profile-avatar-fallback">
+                {displayInitials}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="profile-hero-copy">
-          <p className="profile-kicker">My Profile</p>
+        <div className="profile-hero-copy my-profile-overview-copy">
+          <p className="profile-kicker">Account workspace</p>
           <h1>{profile.name}</h1>
           <p className="profile-handle">@{profile.nickname}</p>
-          <p className="profile-meta-line">
-            Joined {new Date(profile.createdAt).toLocaleDateString()} · {profile.isPremium ? "Premium" : "Standard"} member
-          </p>
-          <div className="profile-hero-actions">
-            <Link to={publicUrl} className="profile-link-btn">
-              View public profile
-            </Link>
+          <div className="my-profile-overview-meta" aria-label="Profile status">
+            <span>{profile.isPremium ? "Premium member" : "Standard member"}</span>
+            <span>Joined {joinedDate}</span>
+            <span>{profile.email}</span>
           </div>
+        </div>
+        <div className="profile-hero-actions my-profile-overview-actions">
+          <span className={`profile-tier-badge ${profile.isPremium ? "profile-tier-badge-premium" : ""}`}>
+            {profile.isPremium ? "Premium" : "Standard"}
+          </span>
+          <Link to={publicUrl} className="profile-link-btn">
+            View public profile
+          </Link>
         </div>
       </motion.section>
 
-      <div className="profile-grid">
+      <div className="my-profile-layout">
+        <aside className="my-profile-side-panel" aria-label="Profile preview">
+          <div className="my-profile-preview-card">
+            <div
+              className="my-profile-preview-hero"
+              style={activeHeroImage
+                ? { backgroundImage: `url(${activeHeroImage})` }
+                : { backgroundImage: selectedHeroTheme.gradient, backgroundColor: selectedHeroTheme.solid }}
+            />
+            <div className="my-profile-preview-body">
+              {form.avatar_url ? (
+                <img src={form.avatar_url} alt="" className="my-profile-preview-avatar" />
+              ) : (
+                <div className="my-profile-preview-avatar my-profile-preview-avatar-fallback">
+                  {displayInitials}
+                </div>
+              )}
+              <strong>{form.name || profile.name}</strong>
+              <span>@{form.nickname || profile.nickname}</span>
+            </div>
+          </div>
+
+          <div className="my-profile-status-card">
+            <span className="my-profile-status-label">Public profile</span>
+            <strong>{publicUrl}</strong>
+            <p>
+              This is how people find your recipes and profile page inside RecipeBox.
+            </p>
+          </div>
+        </aside>
+
+        <div className="profile-grid my-profile-settings-grid">
         <motion.form
-          className="profile-card"
+          className="profile-card my-profile-card my-profile-card-primary"
           onSubmit={handleSaveProfile}
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -350,148 +395,170 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
             <p>{formatNicknameRule(profile)}</p>
           </div>
 
-          <label className="auth-label" htmlFor="profile-name">Name</label>
-          <input
-            id="profile-name"
-            name="name"
-            value={form.name}
-            onChange={handleProfileChange}
-            className="auth-input"
-            required
-          />
+          <section className="my-profile-form-section">
+            <div className="my-profile-section-head">
+              <span>Identity</span>
+              <p>Your visible name and RecipeBox handle.</p>
+            </div>
 
-          <label className="auth-label" htmlFor="profile-nickname">Nickname</label>
-          <input
-            id="profile-nickname"
-            name="nickname"
-            value={form.nickname}
-            onChange={handleProfileChange}
-            className="auth-input"
-            required
-            minLength={3}
-          />
+            <div className="my-profile-field-row">
+              <div className="auth-field">
+                <label className="auth-label" htmlFor="profile-name">Name</label>
+                <input
+                  id="profile-name"
+                  name="name"
+                  value={form.name}
+                  onChange={handleProfileChange}
+                  className="auth-input"
+                  required
+                />
+              </div>
 
-          <label className="auth-label" htmlFor="profile-avatar">Avatar</label>
-          <div className="add-recipe-upload-zone profile-upload-zone">
-            <input
-              id="profile-avatar"
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarUpload}
-              className="add-recipe-file-input"
-            />
-            <label htmlFor="profile-avatar" className="add-recipe-upload-label profile-upload-label">
+              <div className="auth-field">
+                <label className="auth-label" htmlFor="profile-nickname">Nickname</label>
+                <input
+                  id="profile-nickname"
+                  name="nickname"
+                  value={form.nickname}
+                  onChange={handleProfileChange}
+                  className="auth-input"
+                  required
+                  minLength={3}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section className="my-profile-form-section">
+            <div className="my-profile-section-head">
+              <span>Avatar</span>
+              <p>Use a square image for the cleanest crop.</p>
+            </div>
+
+            <label className="auth-label" htmlFor="profile-avatar">Avatar image</label>
+            <div className="add-recipe-upload-zone profile-upload-zone">
+              <input
+                id="profile-avatar"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="add-recipe-file-input"
+              />
+              <label htmlFor="profile-avatar" className="add-recipe-upload-label profile-upload-label">
+                {form.avatar_url ? (
+                  <>
+                    <img src={form.avatar_url} alt="Avatar preview" className="profile-upload-preview-img" />
+                    <span className="add-recipe-upload-text">Click to change avatar</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="add-recipe-upload-icon">AV</span>
+                    <span className="add-recipe-upload-text">Click to upload avatar</span>
+                    <span className="add-recipe-upload-hint">Square image works best</span>
+                  </>
+                )}
+              </label>
               {form.avatar_url ? (
+                <button
+                  type="button"
+                  onClick={clearAvatar}
+                  className="add-recipe-clear-img profile-upload-clear-btn"
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="my-profile-form-section">
+            <div className="profile-hero-settings-head">
+              <div>
+                <label className="auth-label">Public hero appearance</label>
+                <p className="profile-hero-settings-copy">
+                  Everyone can choose the public profile color. Premium members can also replace it with a public hero image.
+                </p>
+              </div>
+              <span className={`profile-tier-badge ${profile.isPremium ? "profile-tier-badge-premium" : ""}`}>
+                {profile.isPremium ? "Premium image access" : "Solid colors only"}
+              </span>
+            </div>
+
+            <div className="profile-hero-swatch-grid" role="radiogroup" aria-label="Public hero color">
+              {PROFILE_HERO_THEMES.map((theme) => {
+                const isSelected = form.hero_color_key === theme.key;
+                return (
+                  <button
+                    key={theme.key}
+                    type="button"
+                    className={`profile-hero-swatch ${isSelected ? "is-selected" : ""}`}
+                    onClick={() => handleHeroColorChange(theme.key)}
+                    aria-pressed={isSelected}
+                  >
+                    <span
+                      className="profile-hero-swatch-preview"
+                      style={{ backgroundImage: theme.gradient, backgroundColor: theme.solid }}
+                    />
+                    <span className="profile-hero-swatch-label">{theme.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <label className="auth-label" htmlFor="profile-background-image">Public hero image</label>
+            <div className={`add-recipe-upload-zone profile-upload-zone ${!profile.isPremium ? "profile-upload-zone-locked" : ""}`}>
+              {profile.isPremium ? (
                 <>
-                  <img src={form.avatar_url} alt="Avatar preview" className="profile-upload-preview-img" />
-                  <span className="add-recipe-upload-text">Click to change avatar</span>
+                  <input
+                    id="profile-background-image"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBackgroundImageUpload}
+                    className="add-recipe-file-input"
+                  />
+                  <label htmlFor="profile-background-image" className="add-recipe-upload-label profile-upload-label profile-upload-label-banner">
+                    {activeHeroImage ? (
+                      <>
+                        <img src={activeHeroImage} alt="Public hero preview" className="profile-upload-preview-banner" />
+                        <span className="add-recipe-upload-text">Click to change public hero image</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="add-recipe-upload-icon">IMG</span>
+                        <span className="add-recipe-upload-text">Click to upload public hero image</span>
+                        <span className="add-recipe-upload-hint">Wide landscape image works best</span>
+                      </>
+                    )}
+                  </label>
+                  {form.background_image_url ? (
+                    <button
+                      type="button"
+                      onClick={clearBackgroundImage}
+                      className="add-recipe-clear-img profile-upload-clear-btn"
+                    >
+                      Remove
+                    </button>
+                  ) : null}
                 </>
               ) : (
-                <>
-                  <span className="add-recipe-upload-icon">AV</span>
-                  <span className="add-recipe-upload-text">Click to upload avatar</span>
-                  <span className="add-recipe-upload-hint">Square image works best</span>
-                </>
-              )}
-            </label>
-            {form.avatar_url ? (
-              <button
-                type="button"
-                onClick={clearAvatar}
-                className="add-recipe-clear-img profile-upload-clear-btn"
-              >
-                Remove
-              </button>
-            ) : null}
-          </div>
-
-          <div className="profile-hero-settings-head">
-            <div>
-              <label className="auth-label">Public hero color</label>
-              <p className="profile-hero-settings-copy">
-                Everyone can choose the public profile color. Premium members can also replace it with a public hero image.
-              </p>
-            </div>
-            <span className={`profile-tier-badge ${profile.isPremium ? "profile-tier-badge-premium" : ""}`}>
-              {profile.isPremium ? "Premium image access" : "Solid colors only"}
-            </span>
-          </div>
-
-          <div className="profile-hero-swatch-grid" role="radiogroup" aria-label="Public hero color">
-            {PROFILE_HERO_THEMES.map((theme) => {
-              const isSelected = form.hero_color_key === theme.key;
-              return (
-                <button
-                  key={theme.key}
-                  type="button"
-                  className={`profile-hero-swatch ${isSelected ? "is-selected" : ""}`}
-                  onClick={() => handleHeroColorChange(theme.key)}
-                  aria-pressed={isSelected}
-                >
-                  <span
-                    className="profile-hero-swatch-preview"
-                    style={{ backgroundImage: theme.gradient, backgroundColor: theme.solid }}
-                  />
-                  <span className="profile-hero-swatch-label">{theme.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <label className="auth-label" htmlFor="profile-background-image">Public hero image</label>
-          <div className={`add-recipe-upload-zone profile-upload-zone ${!profile.isPremium ? "profile-upload-zone-locked" : ""}`}>
-            {profile.isPremium ? (
-              <>
-                <input
-                  id="profile-background-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleBackgroundImageUpload}
-                  className="add-recipe-file-input"
-                />
-                <label htmlFor="profile-background-image" className="add-recipe-upload-label profile-upload-label profile-upload-label-banner">
+                <div className="profile-upload-lock-card">
                   {activeHeroImage ? (
-                    <>
-                      <img src={activeHeroImage} alt="Public hero preview" className="profile-upload-preview-banner" />
-                      <span className="add-recipe-upload-text">Click to change public hero image</span>
-                    </>
+                    <img src={activeHeroImage} alt="Current public hero" className="profile-upload-preview-banner" />
                   ) : (
-                    <>
-                      <span className="add-recipe-upload-icon">IMG</span>
-                      <span className="add-recipe-upload-text">Click to upload public hero image</span>
-                      <span className="add-recipe-upload-hint">Wide landscape image works best</span>
-                    </>
+                    <div
+                      className="profile-upload-preview-banner profile-upload-preview-banner-fallback"
+                      style={{ backgroundImage: selectedHeroTheme.gradient, backgroundColor: selectedHeroTheme.solid }}
+                    />
                   )}
-                </label>
-                {form.background_image_url ? (
-                  <button
-                    type="button"
-                    onClick={clearBackgroundImage}
-                    className="add-recipe-clear-img profile-upload-clear-btn"
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <div className="profile-upload-lock-card">
-                {activeHeroImage ? (
-                  <img src={activeHeroImage} alt="Current public hero" className="profile-upload-preview-banner" />
-                ) : (
-                  <div
-                    className="profile-upload-preview-banner profile-upload-preview-banner-fallback"
-                    style={{ backgroundImage: selectedHeroTheme.gradient, backgroundColor: selectedHeroTheme.solid }}
-                  />
-                )}
-                <strong>Premium public hero image</strong>
-                <span>
-                  {profile.background_image_url
-                    ? "Your existing public hero image stays active, but changing it requires premium."
-                    : "Upgrade to premium to use a custom public hero image."}
-                </span>
-              </div>
-            )}
-          </div>
+                  <strong>Premium public hero image</strong>
+                  <span>
+                    {profile.background_image_url
+                      ? "Your existing public hero image stays active, but changing it requires premium."
+                      : "Upgrade to premium to use a custom public hero image."}
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
 
           <button type="submit" className="auth-btn" disabled={savingProfile}>
             {savingProfile ? "Saving..." : "Save profile"}
@@ -502,7 +569,7 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
         </motion.form>
 
         <motion.form
-          className="profile-card"
+          className="profile-card my-profile-card my-profile-security-card"
           onSubmit={handleSavePassword}
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
@@ -513,40 +580,47 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
             <p>Change your password without touching the rest of your profile.</p>
           </div>
 
-          <label className="auth-label" htmlFor="current-password">Current password</label>
-          <input
-            id="current-password"
-            name="currentPassword"
-            type="password"
-            value={passwordForm.currentPassword}
-            onChange={handlePasswordChange}
-            className="auth-input"
-            required
-          />
+          <section className="my-profile-form-section">
+            <div className="my-profile-section-head">
+              <span>Security</span>
+              <p>Use at least 6 characters for your new password.</p>
+            </div>
 
-          <label className="auth-label" htmlFor="new-password">New password</label>
-          <input
-            id="new-password"
-            name="newPassword"
-            type="password"
-            value={passwordForm.newPassword}
-            onChange={handlePasswordChange}
-            className="auth-input"
-            required
-            minLength={6}
-          />
+            <label className="auth-label" htmlFor="current-password">Current password</label>
+            <input
+              id="current-password"
+              name="currentPassword"
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={handlePasswordChange}
+              className="auth-input"
+              required
+            />
 
-          <label className="auth-label" htmlFor="confirm-password">Confirm new password</label>
-          <input
-            id="confirm-password"
-            name="confirmPassword"
-            type="password"
-            value={passwordForm.confirmPassword}
-            onChange={handlePasswordChange}
-            className="auth-input"
-            required
-            minLength={6}
-          />
+            <label className="auth-label" htmlFor="new-password">New password</label>
+            <input
+              id="new-password"
+              name="newPassword"
+              type="password"
+              value={passwordForm.newPassword}
+              onChange={handlePasswordChange}
+              className="auth-input"
+              required
+              minLength={6}
+            />
+
+            <label className="auth-label" htmlFor="confirm-password">Confirm new password</label>
+            <input
+              id="confirm-password"
+              name="confirmPassword"
+              type="password"
+              value={passwordForm.confirmPassword}
+              onChange={handlePasswordChange}
+              className="auth-input"
+              required
+              minLength={6}
+            />
+          </section>
 
           <button type="submit" className="auth-btn" disabled={savingPassword}>
             {savingPassword ? "Updating..." : "Update password"}
@@ -554,6 +628,7 @@ export default function MyProfile({ token, onUnauthorized }: { token: string; on
 
           {passwordMessage ? <div className="auth-success">{passwordMessage}</div> : null}
         </motion.form>
+        </div>
       </div>
     </div>
   );
