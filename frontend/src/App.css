@@ -3204,7 +3204,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 0 20px 8px;
+  width: 100%;
+  margin: 0;
+  box-sizing: border-box;
 }
 
 .add-recipe-file-input {
@@ -3217,6 +3219,7 @@
   align-items: center;
   justify-content: center;
   width: 100%;
+  box-sizing: border-box;
   padding: 32px 20px;
   background: rgba(255, 213, 79, 0.08);
   border: 2px dashed rgba(255, 213, 79, 0.3);
