@@ -142,6 +142,24 @@ function normalizeRecipeHref(href: string): string {
 
 function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
+
+  // Unescape provider-escaped brackets/parentheses so markdown links like
+  // "[Title](/recipes/uuid)" or escaped "\[Title\]\(/recipes/uuid\)" match.
+  let safeContent = content
+    .replace(/\\\[/g, "[")
+    .replace(/\\\]/g, "]")
+    .replace(/\\\(/g, "(")
+    .replace(/\\\)/g, ")")
+    .replace(/\\\//g, "/");
+
+  // Convert bare recipe paths into markdown links unless they are already inside parentheses.
+  const plainPathRegex = /(?:https?:\/\/[^)\s]+)?\/recipes\/[0-9a-fA-F-]{36}/g;
+  safeContent = safeContent.replace(plainPathRegex, (match, offset, str) => {
+    const prevChar = str[offset - 1];
+    if (prevChar === "(") return match; // already part of markdown link
+    return `[${match}](${match})`;
+  });
+
   const inlinePattern = new RegExp(
     `${RECIPE_LINK_PATTERN}|(\\*\\*([^*\\n]+)\\*\\*)|(\\*([^*\\n]+)\\*)|(<3|:-?\\)|:-?\\(|;-?\\)|:-?D)`,
     "g"
@@ -149,9 +167,9 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = inlinePattern.exec(content)) !== null) {
+  while ((match = inlinePattern.exec(safeContent)) !== null) {
     if (match.index > lastIndex) {
-      nodes.push(content.slice(lastIndex, match.index));
+      nodes.push(safeContent.slice(lastIndex, match.index));
     }
 
     if (match[1] && match[2]) {
@@ -171,8 +189,8 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
     lastIndex = inlinePattern.lastIndex;
   }
 
-  if (lastIndex < content.length) {
-    nodes.push(content.slice(lastIndex));
+  if (lastIndex < safeContent.length) {
+    nodes.push(safeContent.slice(lastIndex));
   }
 
   return nodes;
@@ -369,7 +387,7 @@ export function Chatbot({
       setSessions(nextSessions);
 
       if (selectSessionId) {
-        const selectedSession = nextSessions.find((session) => session.sessionId === selectSessionId);
+        const selectedSession = nextSessions.find((session: ChatSession) => session.sessionId === selectSessionId);
         handledInitialSessionRef.current = selectSessionId;
         if (selectedSession) {
           setActiveSessionId(selectedSession.sessionId);
