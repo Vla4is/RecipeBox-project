@@ -35,7 +35,7 @@ type SseEvent = {
   data: string;
 };
 
-const RECIPE_LINK_PATTERN = String.raw`\[([^\]\n]+)\]\(((?:https?:\/\/[^)\s]+)?\/recipes\/[0-9a-fA-F-]{36})\)`;
+const RECIPE_LINK_PATTERN = String.raw`\[([^\]\n]+)\]\s*\(\s*((?:https?:\/\/[^)\s]+)?\/recipes\/[A-Za-z0-9-]+)\s*\)`;
 
 export type ChatbotContextConfig = {
   key: string;
