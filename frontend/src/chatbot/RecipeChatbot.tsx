@@ -24,7 +24,7 @@ type ChatRecommendation = {
 
 type ChatSession = {
   sessionId: string;
-  recipeId: string;
+  recipeId?: string;
   title: string;
   updatedAt: string;
   messages: ChatMessage[];
@@ -35,7 +35,24 @@ type SseEvent = {
   data: string;
 };
 
-const INTRO_MESSAGE =
+export type ChatbotContextConfig = {
+  key: string;
+  label: string;
+  title: string;
+  historyEndpoint: string;
+  messagesEndpoint: string;
+  assistantLabel?: string;
+  heading?: string;
+  introMessage?: string;
+  lockedTitle?: string;
+  lockedMessage?: string;
+  unavailableMessage?: string;
+  continuePlaceholder?: string;
+  newPlaceholder?: string;
+  ariaLabel?: string;
+};
+
+const DEFAULT_INTRO_MESSAGE =
   "Ask for substitutions, timing help, similar recipes, or ways to adapt this recipe to what you have.";
 
 function getToken(): string | null {
@@ -227,14 +244,12 @@ function renderAssistantContent(content: string): ReactNode {
   return <div className="recipe-chatbot-rich-text">{blocks}</div>;
 }
 
-export default function RecipeChatbot({
-  recipeId,
-  recipeTitle,
+export function Chatbot({
+  context,
   initialSessionId,
   onUnauthorized,
 }: {
-  recipeId: string;
-  recipeTitle: string;
+  context: ChatbotContextConfig;
   initialSessionId?: string | null;
   onUnauthorized?: () => void;
 }) {
@@ -269,6 +284,16 @@ export default function RecipeChatbot({
     };
   }, [isOpen]);
 
+  const assistantLabel = context.assistantLabel || "Premium assistant";
+  const heading = context.heading || "Cook smarter";
+  const introMessage = context.introMessage || DEFAULT_INTRO_MESSAGE;
+  const lockedTitle = context.lockedTitle || "Premium cooking guidance";
+  const lockedMessage = context.lockedMessage || "Unlock recipe-aware tips, substitutions, and timing help while you cook.";
+  const unavailableMessage = context.unavailableMessage || "The assistant is unavailable for this context";
+  const continuePlaceholder = context.continuePlaceholder || "Continue this chat...";
+  const newPlaceholder = context.newPlaceholder || "Ask for a cooking tip...";
+  const ariaLabel = context.ariaLabel || "Premium cooking assistant";
+
   useEffect(() => {
     handledInitialSessionRef.current = null;
     setIsOpen(Boolean(initialSessionId));
@@ -281,7 +306,7 @@ export default function RecipeChatbot({
     setSending(false);
     setLocked(false);
     setError("");
-  }, [recipeId, initialSessionId]);
+  }, [context.key, initialSessionId]);
 
   const refreshHistory = useCallback(async ({
     selectLatest,
@@ -299,7 +324,7 @@ export default function RecipeChatbot({
     setLoadingHistory(true);
     setError("");
     try {
-      const res = await fetch(`/api/chatbot/recipes/${recipeId}/history`, {
+      const res = await fetch(context.historyEndpoint, {
         headers: { Authorization: `Bearer ${currentToken}` },
       });
       const body = await res.json().catch(() => ({} as { error?: string; sessions?: ChatSession[] }));
@@ -316,7 +341,7 @@ export default function RecipeChatbot({
       if (res.status === 404) {
         setSessions([]);
         setActiveSessionId(null);
-        setError(body.error || "Chat history is unavailable for this recipe");
+        setError(body.error || "Chat history is unavailable here");
         return;
       }
       if (!res.ok) {
@@ -349,7 +374,7 @@ export default function RecipeChatbot({
     } finally {
       setLoadingHistory(false);
     }
-  }, [navigate, onUnauthorized, recipeId]);
+  }, [context.historyEndpoint, navigate, onUnauthorized]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -359,7 +384,7 @@ export default function RecipeChatbot({
       selectLatest: messagesLengthRef.current === 0 && !shouldSelectInitial,
       selectSessionId: shouldSelectInitial ? initialSessionId : undefined,
     });
-  }, [isOpen, recipeId, initialSessionId, refreshHistory]);
+  }, [isOpen, context.key, initialSessionId, refreshHistory]);
 
   useEffect(() => {
     if (!shouldAutoScrollRef.current) return;
@@ -419,7 +444,7 @@ export default function RecipeChatbot({
     setMessages((prev) => [...prev, userMessage, { role: "assistant", content: "" }]);
 
     try {
-      const res = await fetch(`/api/chatbot/recipes/${recipeId}/messages`, {
+      const res = await fetch(context.messagesEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -445,7 +470,7 @@ export default function RecipeChatbot({
 
       if (res.status === 404) {
         const body = await res.json().catch(() => ({} as { error?: string }));
-        throw new Error(body.error || "The assistant is unavailable for this recipe");
+        throw new Error(body.error || unavailableMessage);
       }
 
       if (!res.ok || !res.body) {
@@ -538,12 +563,12 @@ export default function RecipeChatbot({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 18, scale: 0.98 }}
             transition={{ duration: 0.22, ease: "easeOut" }}
-            aria-label="Premium recipe assistant"
+            aria-label={ariaLabel}
           >
             <div className="recipe-chatbot-head">
               <div>
-                <span className="recipe-chatbot-kicker">Premium assistant</span>
-                <h2>Cook smarter</h2>
+                <span className="recipe-chatbot-kicker">{assistantLabel}</span>
+                <h2>{heading}</h2>
               </div>
               <button
                 type="button"
@@ -556,15 +581,15 @@ export default function RecipeChatbot({
             </div>
 
             <div className="recipe-chatbot-context">
-              <span>Recipe</span>
-              <strong>{recipeTitle}</strong>
+              <span>{context.label}</span>
+              <strong>{context.title}</strong>
             </div>
 
             {locked || !token ? (
               <div className="recipe-chatbot-locked">
                 <span className="recipe-chatbot-lock-icon">✦</span>
-                <h3>Premium cooking guidance</h3>
-                <p>Unlock recipe-aware tips, substitutions, and timing help while you cook.</p>
+                <h3>{lockedTitle}</h3>
+                <p>{lockedMessage}</p>
                 <div className="recipe-chatbot-lock-actions">
                   {!token ? (
                     <button type="button" onClick={() => navigate("/login")}>Login</button>
@@ -650,7 +675,7 @@ export default function RecipeChatbot({
                   {messages.length === 0 ? (
                     <div className="recipe-chatbot-empty">
                       <span>Ask away</span>
-                      <p>{INTRO_MESSAGE}</p>
+                      <p>{introMessage}</p>
                     </div>
                   ) : (
                     messages.map((message, index) => (
@@ -711,7 +736,7 @@ export default function RecipeChatbot({
                   <textarea
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
-                    placeholder={activeSession ? "Continue this recipe chat..." : "Ask for a cooking tip..."}
+                    placeholder={activeSession ? continuePlaceholder : newPlaceholder}
                     rows={2}
                     maxLength={1000}
                     disabled={sending}
@@ -744,5 +769,40 @@ export default function RecipeChatbot({
         <strong>Ask</strong>
       </motion.button>
     </div>
+  );
+}
+
+export default function RecipeChatbot({
+  recipeId,
+  recipeTitle,
+  initialSessionId,
+  onUnauthorized,
+}: {
+  recipeId: string;
+  recipeTitle: string;
+  initialSessionId?: string | null;
+  onUnauthorized?: () => void;
+}) {
+  const context = useMemo<ChatbotContextConfig>(() => ({
+    key: `recipe:${recipeId}`,
+    label: "Recipe",
+    title: recipeTitle,
+    historyEndpoint: `/api/chatbot/recipes/${recipeId}/history`,
+    messagesEndpoint: `/api/chatbot/recipes/${recipeId}/messages`,
+    introMessage: DEFAULT_INTRO_MESSAGE,
+    lockedTitle: "Premium cooking guidance",
+    lockedMessage: "Unlock recipe-aware tips, substitutions, and timing help while you cook.",
+    unavailableMessage: "The assistant is unavailable for this recipe",
+    continuePlaceholder: "Continue this recipe chat...",
+    newPlaceholder: "Ask for a cooking tip...",
+    ariaLabel: "Premium recipe assistant",
+  }), [recipeId, recipeTitle]);
+
+  return (
+    <Chatbot
+      context={context}
+      initialSessionId={initialSessionId}
+      onUnauthorized={onUnauthorized}
+    />
   );
 }
