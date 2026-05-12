@@ -44,7 +44,7 @@ export interface ChatbotRecommendation {
   href: string;
 }
 
-type ProviderMessage = {
+export type ProviderMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
@@ -747,6 +747,43 @@ export async function getChatbotSearchRecommendations(input: {
     });
 }
 
+function buildGeneralSearchTerm(message: string): string {
+  return message
+    .replace(/\b(i am|i'm|im|looking for|not sure|something|please|can you|could you|would you|recipe|recipes|food|cook|make|want|need)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+}
+
+export async function getGeneralChatbotSearchRecommendations(input: {
+  userId: string;
+  message: string;
+}): Promise<ChatbotRecommendation[]> {
+  const searchTerm = buildGeneralSearchTerm(input.message) || input.message.trim().slice(0, 120);
+  const results = await searchRecipes({
+    searchTerm,
+    userid: input.userId,
+    maxTotalTime: extractMaxTotalTime(input.message),
+    dietType: extractDietType(input.message),
+    difficulties: extractDifficulties(input.message),
+    limit: getChatbotSearchLimit(),
+  });
+
+  return results.slice(0, getChatbotSearchLimit()).map((recipe) => {
+    const totalTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0);
+    return {
+      recipeId: recipe.recipeid,
+      title: recipe.title,
+      description: recipe.description,
+      imageUrl: recipe.thumbnail_url || recipe.image_url,
+      totalTime: totalTime > 0 ? totalTime : null,
+      dietType: recipe.diet_type,
+      difficulty: recipe.difficulty,
+      href: `/recipes/${recipe.recipeid}`,
+    };
+  });
+}
+
 function parseExampleMessages(): ProviderMessage[] {
   reloadChatbotEnv();
   const raw = process.env.CHATBOT_EXAMPLES_JSON;
@@ -795,6 +832,31 @@ export async function buildProviderMessages(input: {
     { role: "system", content: `Use this current page and recipe context:\n${formatRecipeContext(input.details)}` },
     ...(input.recommendations ? [{ role: "system" as const, content: formatRecommendationContext(input.recommendations) }] : []),
     ...input.history,
+  ];
+}
+
+export async function buildGeneralProviderMessages(input: {
+  message: string;
+  recommendations?: ChatbotRecommendation[];
+}): Promise<ProviderMessage[]> {
+  reloadChatbotEnv();
+  const systemPrompt = normalizeEnvText(process.env.CHATBOT_SYSTEM_PROMPT) || DEFAULT_SYSTEM_PROMPT;
+  return [
+    { role: "system", content: systemPrompt },
+    { role: "system", content: NO_CODE_SYSTEM_PROMPT },
+    ...parseExampleMessages(),
+    {
+      role: "system",
+      content: [
+        "The user is on the RecipeBox home/search page, not inside a specific recipe.",
+        "Help them decide what to cook, refine a vague craving, or use the app's recipe catalog.",
+        "If catalog search results are provided, suggest those recipes with short reasons.",
+        "If no catalog results are provided, ask one concise follow-up or suggest broader search terms.",
+        "When you mention a recommended recipe link, format it as Markdown: [Recipe title](/recipes/recipe-id).",
+      ].join("\n"),
+    },
+    ...(input.recommendations ? [{ role: "system" as const, content: formatRecommendationContext(input.recommendations) }] : []),
+    { role: "user", content: input.message },
   ];
 }
 

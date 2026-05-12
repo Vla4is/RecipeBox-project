@@ -35,6 +35,8 @@ type SseEvent = {
   data: string;
 };
 
+const RECIPE_LINK_PATTERN = String.raw`\[([^\]\n]+)\]\(((?:https?:\/\/[^)\s]+)?\/recipes\/[0-9a-fA-F-]{36})\)`;
+
 export type ChatbotContextConfig = {
   key: string;
   label: string;
@@ -128,10 +130,22 @@ function smilieToEmoji(value: string): string {
   }
 }
 
+function normalizeRecipeHref(href: string): string {
+  if (href.startsWith("/")) return href;
+  try {
+    const url = new URL(href);
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return href;
+  }
+}
+
 function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const inlinePattern =
-    /\[([^\]\n]+)\]\((\/recipes\/[0-9a-fA-F-]{36})\)|(\*\*([^*\n]+)\*\*)|(\*([^*\n]+)\*)|(<3|:-?\)|:-?\(|;-?\)|:-?D)/g;
+  const inlinePattern = new RegExp(
+    `${RECIPE_LINK_PATTERN}|(\\*\\*([^*\\n]+)\\*\\*)|(\\*([^*\\n]+)\\*)|(<3|:-?\\)|:-?\\(|;-?\\)|:-?D)`,
+    "g"
+  );
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -142,7 +156,7 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
 
     if (match[1] && match[2]) {
       nodes.push(
-        <Link key={`${keyPrefix}-link-${match.index}`} to={match[2]} className="recipe-chatbot-inline-link">
+        <Link key={`${keyPrefix}-link-${match.index}`} to={normalizeRecipeHref(match[2])} className="recipe-chatbot-inline-link">
           {match[1]}
         </Link>
       );
@@ -171,12 +185,14 @@ function renderAssistantContent(content: string): ReactNode {
     .replace(/\r/g, "\n");
   const lines = normalized.split("\n");
   const blocks: ReactNode[] = [];
+  const recipeLinkLinePattern = new RegExp(`^\\s*${RECIPE_LINK_PATTERN}\\s*(?:[-–—:]\\s*)?.+`);
+  const recipeLinkItemPattern = new RegExp(`^\\s*(${RECIPE_LINK_PATTERN}\\s*(?:[-–—:]\\s*)?.+)`);
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
     const numberedMatch = line.match(/^\s*\d+\.\s+(.+)$/);
-    const recipeLinkParagraphMatch = line.match(/^\s*\[[^\]\n]+\]\(\/recipes\/[0-9a-fA-F-]{36}\)\s*(?:[-–—:]\s*)?.+/);
+    const recipeLinkParagraphMatch = line.match(recipeLinkLinePattern);
 
     if (bulletMatch) {
       const items: ReactNode[] = [];
@@ -215,7 +231,7 @@ function renderAssistantContent(content: string): ReactNode {
     if (recipeLinkParagraphMatch) {
       const items: ReactNode[] = [];
       while (i < lines.length) {
-        const itemMatch = lines[i].match(/^\s*(\[[^\]\n]+\]\(\/recipes\/[0-9a-fA-F-]{36}\)\s*(?:[-–—:]\s*)?.+)/);
+        const itemMatch = lines[i].match(recipeLinkItemPattern);
         if (!itemMatch) break;
         items.push(
           <li key={`rec-link-item-${i}`}>

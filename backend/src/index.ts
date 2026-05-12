@@ -48,11 +48,13 @@ import {
 } from "./services/subscriptionService";
 import { processPremiumCheckout } from "./services/billingService";
 import {
+  buildGeneralProviderMessages,
   buildProviderMessages,
   chatbotRequiresPremium,
   getAllChatbotSessions,
   getChatbotProviderSummary,
   getChatbotSessions,
+  getGeneralChatbotSearchRecommendations,
   getOrCreateChatbotSession,
   getChatbotSearchRecommendations,
   getRecentChatbotMessages,
@@ -488,6 +490,73 @@ app.get("/api/chatbot/history", requireAuth, async (req: AuthRequest, res: Respo
     return res.json({ sessions });
   } catch (err) {
     console.error("Error fetching global chatbot history:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/chatbot/search/history", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isChatbotEnabled()) {
+      return res.status(404).json({ error: "Chatbot is disabled" });
+    }
+
+    const allowed = await canUseChatbot(req.user!.userid);
+    if (!allowed) {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    return res.json({ sessions: [] });
+  } catch (err) {
+    console.error("Error fetching search chatbot history:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/chatbot/search/messages", requireAuth, async (req: AuthRequest, res: Response) => {
+  if (!isChatbotEnabled()) {
+    return res.status(404).json({ error: "Chatbot is disabled" });
+  }
+
+  try {
+    const allowed = await canUseChatbot(req.user!.userid);
+    if (!allowed) {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    const message = normalizeChatbotMessage(req.body?.message);
+    if (!message) {
+      return res.status(400).json({ error: "message is required" });
+    }
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const sessionId = "search";
+    const recommendations = await getGeneralChatbotSearchRecommendations({
+      userId: req.user!.userid,
+      message,
+    });
+    sendChatbotSseRecommendations(res, recommendations);
+
+    const providerMessages = await buildGeneralProviderMessages({ message, recommendations });
+    await streamChatbotCompletion({
+      messages: providerMessages,
+      res,
+      sessionId,
+    });
+
+    sendChatbotSseDone(res, sessionId);
+    return res.end();
+  } catch (err) {
+    console.error("Error streaming search chatbot response:", err);
+    const message = err instanceof Error ? err.message : "The cooking assistant is unavailable right now";
+    if (res.headersSent) {
+      sendChatbotSseError(res, message);
+      return res.end();
+    }
     return res.status(500).json({ error: "Internal server error" });
   }
 });

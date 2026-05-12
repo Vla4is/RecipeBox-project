@@ -4245,6 +4245,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 18px 0;
+  margin-bottom: 8px;
 }
 
 .recipe-chatbot-history-toggle,
