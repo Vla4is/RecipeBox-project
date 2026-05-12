@@ -54,6 +54,7 @@ export type ProviderMessage = {
 type ChatbotSearchDecision = {
   shouldSearch: boolean;
   query: string;
+  queries?: string[];
   maxTotalTime?: number;
   dietType?: "VEGAN" | "VEGETARIAN";
   difficulties?: Array<"EASY" | "MEDIUM" | "HARD">;
@@ -546,7 +547,7 @@ function normalizeRecipeSearchLanguage(message: string): string {
 
 function shouldSearchRecipes(message: string): boolean {
   const text = normalizeRecipeSearchLanguage(message).toLowerCase();
-  return /\b(similar|alternative|alternatives|recommend|recommendation|suggest|suggestion|find|search|look|show|browse|other|another|instead|else|options|ideas|dish|dishes|cook next|what can i cook|recipe like|recipes like|quick|easy|simpler|simple|vegan|vegetarian|turkish|turkiye|turkey|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|american|british|canadian|vietnamese|moroccan|egyptian|croatian|dutch|filipino|irish|jamaican|kenyan|malaysian|polish|portuguese|russian|tunisian)\b/.test(text);
+  return /\b(similar|alternative|alternatives|recommend|recommendation|suggest|suggestion|find|search|look|show|browse|other|another|instead|else|options|ideas|dish|dishes|cook next|what can i cook|recipe like|recipes like|quick|easy|simpler|simple|best|anything|whatever|surprise me|doesnt matter|doesn't matter|vegan|vegetarian|eastern european|east european|eastren european|balkan|ukrainian|turkish|turkiye|turkey|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|american|british|canadian|vietnamese|moroccan|egyptian|croatian|dutch|filipino|irish|jamaican|kenyan|malaysian|polish|portuguese|russian|tunisian)\b/.test(text);
 }
 
 function extractMaxTotalTime(message: string): number | undefined {
@@ -598,11 +599,81 @@ function buildSearchTerm(message: string, details: RecipeDetail): string {
   return normalizedMessage;
 }
 
+function uniqueSearchTerms(terms: string[], limit = 8): string[] {
+  const normalized = new Set<string>();
+  for (const term of terms) {
+    const next = normalizeRecipeSearchLanguage(term).trim().toLowerCase();
+    if (next.length > 0) normalized.add(next.slice(0, 120));
+    if (normalized.size >= limit) break;
+  }
+  return Array.from(normalized);
+}
+
+function addNearbySearchTerms(text: string, add: (term: string) => void): void {
+  if (/\b(eastern european|east european|eastren european|central european)\b/.test(text)) {
+    add("polish");
+    add("ukrainian");
+    add("russian");
+    add("croatian");
+    add("pierogi");
+    add("borsch");
+    add("cabbage");
+    add("beetroot");
+    add("stew");
+  }
+
+  if (/\b(balkan|balkans)\b/.test(text)) {
+    add("croatian");
+    add("greek");
+    add("turkish");
+    add("stew");
+    add("cabbage");
+  }
+
+  if (/\b(middle eastern|levant|levantine|lebanese|arabic)\b/.test(text)) {
+    add("turkish");
+    add("moroccan");
+    add("chickpea");
+    add("lentil");
+    add("flatbread");
+  }
+
+  if (/\b(mediterranean)\b/.test(text)) {
+    add("greek");
+    add("italian");
+    add("spanish");
+    add("turkish");
+    add("salad");
+  }
+
+  if (/\b(tabule|tabbouleh|tabouli|tabbouli)\b/.test(text)) {
+    add("salad");
+    add("herb");
+    add("vegetarian");
+    add("turkish");
+  }
+
+  if (/\b(mjadara|mujadara|mujaddara|mjadra|mjaddara)\b/.test(text)) {
+    add("lentil");
+    add("rice");
+    add("vegetarian");
+    add("turkish");
+  }
+}
+
+function wantsBroadFallback(message: string): boolean {
+  const text = normalizeRecipeSearchLanguage(message).toLowerCase();
+  return /\b(best|anything|whatever|random|surprise me|doesnt matter|doesn't matter|any recipe|any dish|directions? do(?:es)?nt matter|directions? do(?:es)?n't matter)\b/.test(text);
+}
+
 function normalizeSearchDecision(value: unknown): ChatbotSearchDecision | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
   const shouldSearch = candidate.shouldSearch === true;
   const query = typeof candidate.query === "string" ? candidate.query.trim().slice(0, 120) : "";
+  const queries = Array.isArray(candidate.queries)
+    ? uniqueSearchTerms(candidate.queries.filter((item): item is string => typeof item === "string"))
+    : undefined;
   const maxTotalTime = typeof candidate.maxTotalTime === "number" && Number.isFinite(candidate.maxTotalTime) && candidate.maxTotalTime > 0
     ? Math.min(Math.round(candidate.maxTotalTime), 300)
     : undefined;
@@ -618,6 +689,7 @@ function normalizeSearchDecision(value: unknown): ChatbotSearchDecision | null {
   return {
     shouldSearch,
     query,
+    ...(queries && queries.length > 0 ? { queries } : {}),
     ...(maxTotalTime ? { maxTotalTime } : {}),
     ...(dietType ? { dietType } : {}),
     ...(difficulties && difficulties.length > 0 ? { difficulties } : {}),
@@ -646,10 +718,25 @@ function buildFallbackSearchDecision(message: string, details: RecipeDetail): Ch
   return {
     shouldSearch: true,
     query: buildSearchTerm(message, details),
+    queries: buildFallbackSearchQueries(message, details),
     ...(extractMaxTotalTime(message) ? { maxTotalTime: extractMaxTotalTime(message) } : {}),
     ...(extractDietType(message) ? { dietType: extractDietType(message) } : {}),
     ...(extractDifficulties(message) ? { difficulties: extractDifficulties(message) } : {}),
   };
+}
+
+function buildFallbackSearchQueries(message: string, details?: RecipeDetail): string[] {
+  const terms: string[] = [];
+  const add = (term: string) => terms.push(term);
+  const normalizedMessage = normalizeRecipeSearchLanguage(message);
+  const lowerMessage = normalizedMessage.toLowerCase();
+  const generalTerm = buildGeneralSearchTerm(message);
+
+  if (details) add(buildSearchTerm(message, details));
+  add(generalTerm);
+  addNearbySearchTerms(lowerMessage, add);
+
+  return uniqueSearchTerms(terms);
 }
 
 function buildExpandedSearchTerms(input: {
@@ -669,20 +756,11 @@ function buildExpandedSearchTerms(input: {
   ].join(" ").toLowerCase();
 
   add(input.decision.query);
-
-  if (/\b(tabule|tabbouleh|tabouli|tabbouli|mjadara|mujadara|mujaddara|mjadra|mjaddara)\b/.test(combinedText)) {
-    add("turkish vegetarian");
-    add("turkish side");
-    add("salad");
-    add("lentil rice");
-    add("chickpea");
+  for (const query of input.decision.queries || []) {
+    add(query);
   }
 
-  if (/\b(middle eastern|levant|levantine|lebanese|arabic)\b/.test(combinedText)) {
-    add("turkish");
-    add("turkish vegetarian");
-    add("turkish side");
-  }
+  addNearbySearchTerms(combinedText, add);
 
   if (/\bsimilar\b|\bsomething like\b|\bnearby\b|\balternative\b/.test(combinedText)) {
     const cuisineMatch = combinedText.match(/\b(turkish|italian|mexican|indian|thai|chinese|japanese|french|greek|spanish|moroccan|egyptian|vietnamese)\b/);
@@ -738,11 +816,13 @@ async function decideChatbotRecipeSearch(input: {
         content: [
           "You decide whether RecipeBox should search its recipe database before answering.",
           "Return strict JSON only, with no markdown and no commentary.",
-          "Schema: {\"shouldSearch\": boolean, \"query\": string, \"maxTotalTime\"?: number, \"dietType\"?: \"VEGAN\" | \"VEGETARIAN\", \"difficulties\"?: [\"EASY\" | \"MEDIUM\" | \"HARD\"]}.",
+          "Schema: {\"shouldSearch\": boolean, \"query\": string, \"queries\"?: string[], \"maxTotalTime\"?: number, \"dietType\"?: \"VEGAN\" | \"VEGETARIAN\", \"difficulties\"?: [\"EASY\" | \"MEDIUM\" | \"HARD\"]}.",
           "Set shouldSearch=true when the user asks to find, look for, show, browse, recommend, compare, or switch to another recipe/dish/cuisine.",
           "Set shouldSearch=true when the user expresses a cuisine preference, dislikes the current cuisine, asks for easier/faster alternatives, or asks what they can cook with an ingredient.",
           "Set shouldSearch=false for pure cooking help about the current recipe, substitutions, technique, timing, or definitions, unless the user asks for another recipe.",
+          "Use queries for broad or fuzzy requests. Include up to 8 concrete fallback terms the database should try, ordered best to broadest.",
           "Preserve cuisine or ingredient words in query. Examples: Turkish/Turkiye -> turkish, chicken recipes -> chicken, any other recipe -> empty string.",
+          "For regional cuisines, expand to nearby concrete catalog terms. Examples: Eastern European -> polish, ukrainian, russian, croatian, pierogi, borsch, cabbage, beetroot, stew.",
           "Be flexible with dish spellings and nearby cuisines. Examples: tabule/tabbouleh -> salad, herb, vegetarian, Turkish/Middle Eastern style; mjadara/mujaddara -> lentil, rice, vegetarian, Turkish/Middle Eastern style.",
           "For follow-ups like 'something similar', use recent user requests as context instead of only the currently open recipe.",
           "Never use the current recipe title as query unless the user explicitly asks for similar recipes.",
@@ -765,6 +845,7 @@ async function decideChatbotRecipeSearch(input: {
     return {
       shouldSearch: true,
       query: normalizeRecipeSearchLanguage(decision.query || fallback.query),
+      queries: uniqueSearchTerms([...(decision.queries || []), ...(fallback.queries || [])]),
       ...(decision.maxTotalTime ? { maxTotalTime: decision.maxTotalTime } : fallback.maxTotalTime ? { maxTotalTime: fallback.maxTotalTime } : {}),
       ...(decision.dietType ? { dietType: decision.dietType } : fallback.dietType ? { dietType: fallback.dietType } : {}),
       ...(decision.difficulties?.length ? { difficulties: decision.difficulties } : fallback.difficulties?.length ? { difficulties: fallback.difficulties } : {}),
@@ -801,6 +882,20 @@ function formatRecommendationContext(recommendations: ChatbotRecommendation[]): 
     "Only recommend these recipes when suggesting app links. Do not invent recipe links or recipe IDs.",
     "When you mention a recommended recipe link in your reply, format it as Markdown: [Recipe title](/recipes/recipe-id).",
   ].join("\n\n");
+}
+
+function toChatbotRecommendation(recipe: Awaited<ReturnType<typeof searchRecipes>>[number]): ChatbotRecommendation {
+  const totalTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0);
+  return {
+    recipeId: recipe.recipeid,
+    title: recipe.title,
+    description: recipe.description,
+    imageUrl: recipe.thumbnail_url || recipe.image_url,
+    totalTime: totalTime > 0 ? totalTime : null,
+    dietType: recipe.diet_type,
+    difficulty: recipe.difficulty,
+    href: `/recipes/${recipe.recipeid}`,
+  };
 }
 
 export async function getChatbotSearchRecommendations(input: {
@@ -841,22 +936,25 @@ export async function getChatbotSearchRecommendations(input: {
     if (resultMap.size >= getChatbotSearchLimit()) break;
   }
 
+  if (resultMap.size === 0 && wantsBroadFallback(input.message)) {
+    const results = await searchRecipes({
+      searchTerm: "",
+      userid: input.userId,
+      maxTotalTime: decision.maxTotalTime,
+      dietType: decision.dietType,
+      difficulties: decision.difficulties,
+      limit: getChatbotSearchLimit() + 2,
+    });
+
+    for (const recipe of results) {
+      resultMap.set(recipe.recipeid, recipe);
+    }
+  }
+
   return Array.from(resultMap.values())
     .filter((recipe) => recipe.recipeid !== input.details.recipe.recipeid)
     .slice(0, getChatbotSearchLimit())
-    .map((recipe) => {
-      const totalTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0);
-      return {
-        recipeId: recipe.recipeid,
-        title: recipe.title,
-        description: recipe.description,
-        imageUrl: recipe.thumbnail_url || recipe.image_url,
-        totalTime: totalTime > 0 ? totalTime : null,
-        dietType: recipe.diet_type,
-        difficulty: recipe.difficulty,
-        href: `/recipes/${recipe.recipeid}`,
-      };
-    });
+    .map(toChatbotRecommendation);
 }
 
 function buildGeneralSearchTerm(message: string): string {
@@ -867,33 +965,119 @@ function buildGeneralSearchTerm(message: string): string {
     .slice(0, 120);
 }
 
+function buildFallbackGeneralSearchDecision(message: string): ChatbotSearchDecision {
+  const query = buildGeneralSearchTerm(message);
+  const queries = buildFallbackSearchQueries(message);
+  return {
+    shouldSearch: query.length > 0 || queries.length > 0 || wantsBroadFallback(message),
+    query,
+    queries,
+    ...(extractMaxTotalTime(message) ? { maxTotalTime: extractMaxTotalTime(message) } : {}),
+    ...(extractDietType(message) ? { dietType: extractDietType(message) } : {}),
+    ...(extractDifficulties(message) ? { difficulties: extractDifficulties(message) } : {}),
+  };
+}
+
+async function decideGeneralChatbotRecipeSearch(input: {
+  message: string;
+  history: ProviderMessage[];
+}): Promise<ChatbotSearchDecision> {
+  const fallback = buildFallbackGeneralSearchDecision(input.message);
+  const recentHistory = input.history.slice(-6);
+
+  try {
+    const content = await callNonStreamingProvider([
+      {
+        role: "system",
+        content: [
+          "You decide how RecipeBox should search its recipe database before the assistant answers from the home/search chat.",
+          "Return strict JSON only, with no markdown and no commentary.",
+          "Schema: {\"shouldSearch\": boolean, \"query\": string, \"queries\"?: string[], \"maxTotalTime\"?: number, \"dietType\"?: \"VEGAN\" | \"VEGETARIAN\", \"difficulties\"?: [\"EASY\" | \"MEDIUM\" | \"HARD\"]}.",
+          "Set shouldSearch=true for any request about finding, choosing, recommending, comparing, browsing, or cooking recipes.",
+          "Use queries for broad, misspelled, regional, or fuzzy requests. Include up to 8 concrete database search terms, ordered best to broadest.",
+          "Preserve important cuisine, dish, ingredient, diet, and time words, but remove filler words.",
+          "For regional cuisines, expand to nearby concrete catalog terms. Examples: Eastern European -> polish, ukrainian, russian, croatian, pierogi, borsch, cabbage, beetroot, stew.",
+          "If the user says best, anything, doesn't matter, random, or surprise me, still return useful query ideas and allow broad fallback by keeping shouldSearch=true.",
+        ].join("\n"),
+      },
+      ...recentHistory,
+      {
+        role: "user",
+        content: input.message,
+      },
+    ]);
+
+    const decision = parseDecisionJson(content);
+    if (!decision) return fallback;
+    if (!decision.shouldSearch) return fallback.shouldSearch ? fallback : { shouldSearch: false, query: "" };
+
+    return {
+      shouldSearch: true,
+      query: normalizeRecipeSearchLanguage(decision.query || fallback.query),
+      queries: uniqueSearchTerms([...(decision.queries || []), ...(fallback.queries || [])]),
+      ...(decision.maxTotalTime ? { maxTotalTime: decision.maxTotalTime } : fallback.maxTotalTime ? { maxTotalTime: fallback.maxTotalTime } : {}),
+      ...(decision.dietType ? { dietType: decision.dietType } : fallback.dietType ? { dietType: fallback.dietType } : {}),
+      ...(decision.difficulties?.length ? { difficulties: decision.difficulties } : fallback.difficulties?.length ? { difficulties: fallback.difficulties } : {}),
+    };
+  } catch (err) {
+    console.warn("Falling back to deterministic general chatbot search decision:", err instanceof Error ? err.message : err);
+    return fallback;
+  }
+}
+
 export async function getGeneralChatbotSearchRecommendations(input: {
   userId: string;
   message: string;
+  history?: ProviderMessage[];
 }): Promise<ChatbotRecommendation[]> {
-  const searchTerm = buildGeneralSearchTerm(input.message) || input.message.trim().slice(0, 120);
-  const results = await searchRecipes({
-    searchTerm,
-    userid: input.userId,
-    maxTotalTime: extractMaxTotalTime(input.message),
-    dietType: extractDietType(input.message),
-    difficulties: extractDifficulties(input.message),
-    limit: getChatbotSearchLimit(),
+  const decision = await decideGeneralChatbotRecipeSearch({
+    message: input.message,
+    history: input.history || [],
   });
+  if (!decision.shouldSearch) return [];
 
-  return results.slice(0, getChatbotSearchLimit()).map((recipe) => {
-    const totalTime = (recipe.proptimemin ?? 0) + (recipe.cooktimemin ?? 0);
-    return {
-      recipeId: recipe.recipeid,
-      title: recipe.title,
-      description: recipe.description,
-      imageUrl: recipe.thumbnail_url || recipe.image_url,
-      totalTime: totalTime > 0 ? totalTime : null,
-      dietType: recipe.diet_type,
-      difficulty: recipe.difficulty,
-      href: `/recipes/${recipe.recipeid}`,
-    };
-  });
+  const searchTerms = uniqueSearchTerms([
+    decision.query,
+    ...(decision.queries || []),
+    ...buildFallbackSearchQueries(input.message),
+  ]);
+  const resultMap = new Map<string, Awaited<ReturnType<typeof searchRecipes>>[number]>();
+
+  for (const searchTerm of searchTerms) {
+    const results = await searchRecipes({
+      searchTerm,
+      userid: input.userId,
+      maxTotalTime: decision.maxTotalTime,
+      dietType: decision.dietType,
+      difficulties: decision.difficulties,
+      limit: getChatbotSearchLimit() + 2,
+    });
+
+    for (const recipe of results) {
+      resultMap.set(recipe.recipeid, recipe);
+    }
+
+    if (resultMap.size >= getChatbotSearchLimit()) break;
+  }
+
+  if (resultMap.size === 0 && wantsBroadFallback(input.message)) {
+    const results = await searchRecipes({
+      searchTerm: "",
+      userid: input.userId,
+      maxTotalTime: decision.maxTotalTime,
+      dietType: decision.dietType,
+      difficulties: decision.difficulties,
+      limit: getChatbotSearchLimit(),
+    });
+
+    for (const recipe of results) {
+      resultMap.set(recipe.recipeid, recipe);
+    }
+  }
+
+  return Array.from(resultMap.values())
+    .slice(0, getChatbotSearchLimit())
+    .map(toChatbotRecommendation);
 }
 
 function parseExampleMessages(): ProviderMessage[] {

@@ -549,6 +549,7 @@ app.post("/api/chatbot/search/messages", requireAuth, async (req: AuthRequest, r
     const recommendations = await getGeneralChatbotSearchRecommendations({
       userId: req.user!.userid,
       message,
+      history,
     });
     sendChatbotSseRecommendations(res, recommendations);
 
