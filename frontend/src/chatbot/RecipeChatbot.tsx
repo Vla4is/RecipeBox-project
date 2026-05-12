@@ -85,6 +85,11 @@ function getRecipeMeta(recipe: ChatRecommendation): string {
   ].filter(Boolean).join(" • ");
 }
 
+function getSessionPreview(session: ChatSession): string {
+  const latest = [...(session.messages || [])].reverse().find((message) => message.content.trim());
+  return latest?.content.replace(/\s+/g, " ").trim() || "No messages yet";
+}
+
 function smilieToEmoji(value: string): string {
   switch (value.toLowerCase()) {
     case ":)":
@@ -551,9 +556,13 @@ export default function RecipeChatbot({
                     onClick={() => setIsHistoryOpen((open) => !open)}
                     aria-expanded={isHistoryOpen}
                   >
-                    <span>History</span>
-                    <strong>{sessions.length}</strong>
-                    <i>{isHistoryOpen ? "⌃" : "⌄"}</i>
+                    <span className="recipe-chatbot-history-toggle-copy">
+                      <strong>History</strong>
+                      <small>{sessions.length === 0 ? "No saved chats" : `${sessions.length} saved chat${sessions.length === 1 ? "" : "s"}`}</small>
+                    </span>
+                    <span className="recipe-chatbot-history-toggle-meta">
+                      <b>{sessions.length}</b>
+                    </span>
                   </button>
                   <button type="button" className="recipe-chatbot-new-btn" onClick={handleNewChat}>
                     New
@@ -570,13 +579,21 @@ export default function RecipeChatbot({
                       transition={{ duration: 0.2 }}
                     >
                       {loadingHistory ? (
-                        <p className="recipe-chatbot-muted">Loading history...</p>
+                        <div className="recipe-chatbot-history-state">
+                          <span className="recipe-chatbot-history-state-mark">...</span>
+                          <strong>Loading history</strong>
+                          <p>Finding your saved cooking chats.</p>
+                        </div>
                       ) : groupedSessions.length === 0 ? (
-                        <p className="recipe-chatbot-muted">No saved chats for this recipe yet.</p>
+                        <div className="recipe-chatbot-history-state">
+                          <span className="recipe-chatbot-history-state-mark">+</span>
+                          <strong>No saved chats yet</strong>
+                          <p>Start a conversation and it will appear here.</p>
+                        </div>
                       ) : (
                         groupedSessions.map(([label, group]) => (
                           <div key={label} className="recipe-chatbot-history-group">
-                            <span>{label}</span>
+                            <span className="recipe-chatbot-history-date">{label}</span>
                             {group.map((session) => (
                               <button
                                 key={session.sessionId}
@@ -584,8 +601,13 @@ export default function RecipeChatbot({
                                 className={session.sessionId === activeSessionId ? "is-active" : ""}
                                 onClick={() => handleResumeSession(session)}
                               >
-                                <strong>{session.title}</strong>
-                                <small>{session.messages.length} messages</small>
+                                <span className="recipe-chatbot-history-session-main">
+                                  <strong>{session.title}</strong>
+                                  <small>{getSessionPreview(session)}</small>
+                                </span>
+                                <span className="recipe-chatbot-history-session-meta">
+                                  {session.messages.length}
+                                </span>
                               </button>
                             ))}
                           </div>
