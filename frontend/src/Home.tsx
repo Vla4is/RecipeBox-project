@@ -175,6 +175,7 @@ function getTwoEqualRowsItems(items: RecipeFromDB[], containerWidth: number): Re
 function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const initialChatSessionId = searchParams.get("chatSession");
   const initialHomeViewState = useMemo(() => {
     const persisted = loadHomeViewState();
     const urlParams = new URLSearchParams(window.location.search);
@@ -293,6 +294,8 @@ function Home() {
     if (dietFilterActive && selectedDiet) nextParams.set("dietType", selectedDiet);
     if (difficultyFilterActive && selectedDifficulty) nextParams.set("difficulty", selectedDifficulty);
     if (searchSort !== "relevance") nextParams.set("sort", searchSort);
+    const chatSession = searchParams.get("chatSession");
+    if (chatSession) nextParams.set("chatSession", chatSession);
 
     const currentQuery = searchParams.toString();
     const nextQuery = nextParams.toString();
@@ -592,13 +595,18 @@ function Home() {
             <span className="hero-search-icon">🔍</span>
             <input
               type="text"
+              enterKeyHint="search"
+              autoComplete="off"
               placeholder="Search your and community recipes by tags, title, description..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={() => setIsSearchUiFocused(true)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
+                  e.preventDefault();
                   void runSearch();
+                  e.currentTarget.blur();
+                  setIsSearchUiFocused(false);
                 }
               }}
             />
@@ -867,7 +875,7 @@ function Home() {
           </div>
         )}
       </div>
-      <Chatbot context={searchChatbotContext} />
+      <Chatbot context={searchChatbotContext} initialSessionId={initialChatSessionId} />
     </div>
   );
 }

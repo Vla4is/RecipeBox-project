@@ -5,8 +5,9 @@ import "./App.css";
 
 type ChatHistorySession = {
   sessionId: string;
-  recipeId: string;
-  recipeTitle: string;
+  recipeId: string | null;
+  contextType: "recipe" | "search";
+  recipeTitle: string | null;
   recipeImageUrl: string | null;
   title: string;
   updatedAt: string;
@@ -76,6 +77,11 @@ export default function ChatHistory({
   );
 
   const openSession = (session: ChatHistorySession) => {
+    if (session.contextType === "search" || !session.recipeId) {
+      navigate(`/?chatSession=${encodeURIComponent(session.sessionId)}`);
+      return;
+    }
+
     navigate(`/recipes/${session.recipeId}?chatSession=${encodeURIComponent(session.sessionId)}`);
   };
 
@@ -130,8 +136,8 @@ export default function ChatHistory({
             <h1>Chat History</h1>
             <p>
               {sessions.length === 0
-                ? "Your saved recipe chats will appear here."
-                : `${sessions.length} chat${sessions.length === 1 ? "" : "s"} across recipes, ${totalMessages} total message${totalMessages === 1 ? "" : "s"}.`}
+                ? "Your saved assistant chats will appear here."
+                : `${sessions.length} saved chat${sessions.length === 1 ? "" : "s"}, ${totalMessages} total message${totalMessages === 1 ? "" : "s"}.`}
             </p>
           </div>
           <button type="button" onClick={() => navigate("/")}>
@@ -142,7 +148,7 @@ export default function ChatHistory({
         {sessions.length === 0 ? (
           <div className="chat-history-empty">
             <span>No chats yet</span>
-            <h2>Ask from any recipe page</h2>
+            <h2>Ask from search or any recipe page</h2>
             <p>Once you start a premium assistant chat, it will show up here so you can continue it later.</p>
           </div>
         ) : (
@@ -166,7 +172,7 @@ export default function ChatHistory({
                 {session.recipeImageUrl ? (
                   <img src={session.recipeImageUrl} alt="" />
                 ) : (
-                  <div className="chat-history-image-fallback">Chat</div>
+                  <div className="chat-history-image-fallback">{session.contextType === "search" ? "Search" : "Chat"}</div>
                 )}
                 <div className="chat-history-card-body">
                   <div className="chat-history-card-topline">
@@ -174,7 +180,7 @@ export default function ChatHistory({
                     <small>{session.messageCount} message{session.messageCount === 1 ? "" : "s"}</small>
                   </div>
                   <h2>{session.title}</h2>
-                  <strong>{session.recipeTitle}</strong>
+                  <strong>{session.contextType === "search" ? "Search assistant" : session.recipeTitle}</strong>
                   {session.latestPreview ? <p>{session.latestPreview}</p> : null}
                 </div>
               </motion.button>

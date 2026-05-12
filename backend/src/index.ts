@@ -56,8 +56,10 @@ import {
   getChatbotSessions,
   getGeneralChatbotSearchRecommendations,
   getOrCreateChatbotSession,
+  getOrCreateSearchChatbotSession,
   getChatbotSearchRecommendations,
   getRecentChatbotMessages,
+  getSearchChatbotSessions,
   isChatbotEnabled,
   normalizeChatbotMessage,
   saveChatbotMessage,
@@ -505,7 +507,8 @@ app.get("/api/chatbot/search/history", requireAuth, async (req: AuthRequest, res
       return res.status(403).json({ error: "Premium subscription required" });
     }
 
-    return res.json({ sessions: [] });
+    const sessions = await getSearchChatbotSessions(req.user!.userid);
+    return res.json({ sessions });
   } catch (err) {
     console.error("Error fetching search chatbot history:", err);
     return res.status(500).json({ error: "Internal server error" });
@@ -524,6 +527,7 @@ app.post("/api/chatbot/search/messages", requireAuth, async (req: AuthRequest, r
     }
 
     const message = normalizeChatbotMessage(req.body?.message);
+    const requestedSessionId = normalizeOptionalUuid(req.body?.sessionId);
     if (!message) {
       return res.status(400).json({ error: "message is required" });
     }
@@ -534,19 +538,35 @@ app.post("/api/chatbot/search/messages", requireAuth, async (req: AuthRequest, r
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders?.();
 
-    const sessionId = "search";
+    const sessionId = await getOrCreateSearchChatbotSession({
+      userId: req.user!.userid,
+      sessionId: requestedSessionId,
+      firstMessage: message,
+    });
+
+    await saveChatbotMessage({ sessionId, role: "user", content: message });
+    const history = await getRecentChatbotMessages(sessionId);
     const recommendations = await getGeneralChatbotSearchRecommendations({
       userId: req.user!.userid,
       message,
     });
     sendChatbotSseRecommendations(res, recommendations);
 
-    const providerMessages = await buildGeneralProviderMessages({ message, recommendations });
-    await streamChatbotCompletion({
+    const providerMessages = await buildGeneralProviderMessages({ message, history, recommendations });
+    const assistantMessage = await streamChatbotCompletion({
       messages: providerMessages,
       res,
       sessionId,
     });
+
+    if (assistantMessage) {
+      await saveChatbotMessage({
+        sessionId,
+        role: "assistant",
+        content: assistantMessage,
+        recommendations,
+      });
+    }
 
     sendChatbotSseDone(res, sessionId);
     return res.end();

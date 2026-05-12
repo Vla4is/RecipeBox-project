@@ -516,14 +516,40 @@ async function createTables() {
 
     if (await tableExists('chatbot_sessions')) {
       console.log('Chatbot sessions table already exists, skipping creation');
+      const contextTypeCheck = await pool.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = 'chatbot_sessions' AND column_name = 'context_type'`
+      );
+      if (contextTypeCheck.rows.length === 0) {
+        await pool.query(`ALTER TABLE chatbot_sessions ADD COLUMN context_type VARCHAR(16) NOT NULL DEFAULT 'recipe'`);
+        console.log('Added context_type column to chatbot_sessions table');
+      }
+      await pool.query(`UPDATE chatbot_sessions SET context_type = 'recipe' WHERE context_type IS NULL OR LENGTH(TRIM(context_type)) = 0`);
+      await pool.query(`ALTER TABLE chatbot_sessions ALTER COLUMN context_type SET DEFAULT 'recipe'`);
+      await pool.query(`ALTER TABLE chatbot_sessions ALTER COLUMN context_type SET NOT NULL`);
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = 'chatbot_sessions'
+              AND column_name = 'recipeid'
+              AND is_nullable = 'NO'
+          ) THEN
+            ALTER TABLE chatbot_sessions ALTER COLUMN recipeid DROP NOT NULL;
+          END IF;
+        END $$;
+      `);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_chatbot_sessions_user_recipe_updated ON chatbot_sessions(userid, recipeid, updated_at DESC)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS idx_chatbot_sessions_user_context_updated ON chatbot_sessions(userid, context_type, updated_at DESC)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS idx_chatbot_sessions_expires ON chatbot_sessions(expires_at)`);
     } else {
       await pool.query(`
         CREATE TABLE chatbot_sessions (
           sessionid UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           userid UUID NOT NULL REFERENCES users(userid) ON DELETE CASCADE,
-          recipeid UUID NOT NULL REFERENCES recipes(recipeid) ON DELETE CASCADE,
+          recipeid UUID REFERENCES recipes(recipeid) ON DELETE CASCADE,
+          context_type VARCHAR(16) NOT NULL DEFAULT 'recipe',
           title VARCHAR(120) NOT NULL DEFAULT 'Recipe chat',
           expires_at TIMESTAMP NOT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -531,6 +557,7 @@ async function createTables() {
         );
       `);
       await pool.query(`CREATE INDEX idx_chatbot_sessions_user_recipe_updated ON chatbot_sessions(userid, recipeid, updated_at DESC)`);
+      await pool.query(`CREATE INDEX idx_chatbot_sessions_user_context_updated ON chatbot_sessions(userid, context_type, updated_at DESC)`);
       await pool.query(`CREATE INDEX idx_chatbot_sessions_expires ON chatbot_sessions(expires_at)`);
       console.log('Chatbot sessions table created successfully');
     }
