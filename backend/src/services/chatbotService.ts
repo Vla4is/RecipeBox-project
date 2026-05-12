@@ -68,7 +68,14 @@ export interface ChatbotProviderSummary {
 }
 
 const DEFAULT_SYSTEM_PROMPT =
-  "You are RecipeBox's premium cooking assistant. Give concise, practical cooking advice based only on the recipe context and the user's question. If something is uncertain, say so clearly.";
+  "You are RecipeBox's premium cooking assistant. Give concise, practical cooking advice based only on the recipe context and the user's question. If something is uncertain, say so clearly. You may use light Markdown such as bold text, short lists, and internal recipe links when helpful.";
+
+const NO_CODE_SYSTEM_PROMPT = [
+  "Hard boundary: never output programming code, code blocks, SQL, API examples, React/backend snippets, or technical implementation instructions.",
+  "Do not use fenced code blocks or backtick code formatting.",
+  "If the user asks for code or implementation details, politely refuse in one short sentence and redirect to cooking, recipe, substitution, timing, or RecipeBox recipe help.",
+  "Stay in the domain of food and cooking. Warm emoji or smilies are okay sparingly.",
+].join("\n");
 
 function reloadChatbotEnv(): void {
   dotenv.config({
@@ -726,6 +733,7 @@ export async function buildProviderMessages(input: {
   const systemPrompt = normalizeEnvText(process.env.CHATBOT_SYSTEM_PROMPT) || DEFAULT_SYSTEM_PROMPT;
   return [
     { role: "system", content: systemPrompt },
+    { role: "system", content: NO_CODE_SYSTEM_PROMPT },
     ...parseExampleMessages(),
     { role: "system", content: `Use this current page and recipe context:\n${formatRecipeContext(input.details)}` },
     ...(input.recommendations ? [{ role: "system" as const, content: formatRecommendationContext(input.recommendations) }] : []),

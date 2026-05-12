@@ -3923,6 +3923,38 @@
   background: rgba(255, 255, 255, 0.92);
   color: #222;
   border-bottom-left-radius: 8px;
+  white-space: normal;
+}
+
+.recipe-chatbot-rich-text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recipe-chatbot-rich-paragraph {
+  margin: 0;
+}
+
+.recipe-chatbot-rich-gap {
+  height: 2px;
+}
+
+.recipe-chatbot-rich-list {
+  margin: 0;
+  padding-left: 19px;
+}
+
+.recipe-chatbot-rich-list li + li {
+  margin-top: 4px;
+}
+
+.recipe-chatbot-rich-text strong {
+  font-weight: 800;
+}
+
+.recipe-chatbot-rich-text em {
+  font-style: italic;
 }
 
 .recipe-chatbot-inline-link {

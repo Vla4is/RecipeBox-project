@@ -85,32 +85,123 @@ function getRecipeMeta(recipe: ChatRecommendation): string {
   ].filter(Boolean).join(" • ");
 }
 
-function renderAssistantContent(content: string): ReactNode {
+function smilieToEmoji(value: string): string {
+  switch (value.toLowerCase()) {
+    case ":)":
+    case ":-)":
+      return "🙂";
+    case ":(":
+    case ":-(":
+      return "🙁";
+    case ";)":
+    case ";-)":
+      return "😉";
+    case ":d":
+    case ":-d":
+      return "😄";
+    case "<3":
+      return "❤️";
+    default:
+      return value;
+  }
+}
+
+function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = [];
-  const linkPattern = /\[([^\]\n]+)\]\((\/recipes\/[0-9a-fA-F-]{36})\)|(\/recipes\/[0-9a-fA-F-]{36})(?=[\s).,!?;:]|$)/g;
+  const inlinePattern =
+    /\[([^\]\n]+)\]\((\/recipes\/[0-9a-fA-F-]{36})\)|(\*\*([^*\n]+)\*\*)|(\*([^*\n]+)\*)|(<3|:-?\)|:-?\(|;-?\)|:-?D)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = linkPattern.exec(content)) !== null) {
+  while ((match = inlinePattern.exec(content)) !== null) {
     if (match.index > lastIndex) {
       nodes.push(content.slice(lastIndex, match.index));
     }
 
-    const href = match[2] || match[3];
-    const label = match[1] || "Open recipe";
-    nodes.push(
-      <Link key={`${href}-${match.index}`} to={href} className="recipe-chatbot-inline-link">
-        {label}
-      </Link>
-    );
-    lastIndex = linkPattern.lastIndex;
+    if (match[1] && match[2]) {
+      nodes.push(
+        <Link key={`${keyPrefix}-link-${match.index}`} to={match[2]} className="recipe-chatbot-inline-link">
+          {match[1]}
+        </Link>
+      );
+    } else if (match[4]) {
+      nodes.push(<strong key={`${keyPrefix}-bold-${match.index}`}>{match[4]}</strong>);
+    } else if (match[6]) {
+      nodes.push(<em key={`${keyPrefix}-italic-${match.index}`}>{match[6]}</em>);
+    } else if (match[7]) {
+      nodes.push(smilieToEmoji(match[7]));
+    }
+
+    lastIndex = inlinePattern.lastIndex;
   }
 
   if (lastIndex < content.length) {
     nodes.push(content.slice(lastIndex));
   }
 
-  return nodes.length > 0 ? nodes : content;
+  return nodes;
+}
+
+function renderAssistantContent(content: string): ReactNode {
+  const normalized = content
+    .replace(/```+/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  const lines = normalized.split("\n");
+  const blocks: ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
+    const numberedMatch = line.match(/^\s*\d+\.\s+(.+)$/);
+
+    if (bulletMatch) {
+      const items: ReactNode[] = [];
+      while (i < lines.length) {
+        const itemMatch = lines[i].match(/^\s*[-*]\s+(.+)$/);
+        if (!itemMatch) break;
+        items.push(
+          <li key={`ul-item-${i}`}>
+            {renderInlineContent(itemMatch[1], `ul-${i}`)}
+          </li>
+        );
+        i += 1;
+      }
+      i -= 1;
+      blocks.push(<ul key={`ul-${i}`} className="recipe-chatbot-rich-list">{items}</ul>);
+      continue;
+    }
+
+    if (numberedMatch) {
+      const items: ReactNode[] = [];
+      while (i < lines.length) {
+        const itemMatch = lines[i].match(/^\s*\d+\.\s+(.+)$/);
+        if (!itemMatch) break;
+        items.push(
+          <li key={`ol-item-${i}`}>
+            {renderInlineContent(itemMatch[1], `ol-${i}`)}
+          </li>
+        );
+        i += 1;
+      }
+      i -= 1;
+      blocks.push(<ol key={`ol-${i}`} className="recipe-chatbot-rich-list">{items}</ol>);
+      continue;
+    }
+
+    if (line.trim().length === 0) {
+      blocks.push(<div key={`gap-${i}`} className="recipe-chatbot-rich-gap" />);
+      continue;
+    }
+
+    blocks.push(
+      <p key={`p-${i}`} className="recipe-chatbot-rich-paragraph">
+        {renderInlineContent(line, `p-${i}`)}
+      </p>
+    );
+  }
+
+  return <div className="recipe-chatbot-rich-text">{blocks}</div>;
 }
 
 export default function RecipeChatbot({
@@ -126,6 +217,8 @@ export default function RecipeChatbot({
 }) {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
   const handledInitialSessionRef = useRef<string | null>(null);
   const messagesLengthRef = useRef(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -239,8 +332,17 @@ export default function RecipeChatbot({
   }, [isOpen, recipeId, initialSessionId, refreshHistory]);
 
   useEffect(() => {
+    if (!shouldAutoScrollRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
+
+  const handleMessagesScroll = () => {
+    const element = messagesContainerRef.current;
+    if (!element) return;
+
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 80;
+  };
 
   const groupedSessions = useMemo(() => {
     const groups = new Map<string, ChatSession[]>();
@@ -281,6 +383,7 @@ export default function RecipeChatbot({
     setSending(true);
     setError("");
     setLocked(false);
+    shouldAutoScrollRef.current = true;
 
     const userMessage: ChatMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMessage, { role: "assistant", content: "" }]);
@@ -323,6 +426,7 @@ export default function RecipeChatbot({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let pendingRecommendations: ChatRecommendation[] | null = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -346,14 +450,7 @@ export default function RecipeChatbot({
             setActiveSessionId(data.sessionId);
           }
           if (parsed.event === "recommendations" && Array.isArray(data.recipes)) {
-            setMessages((prev) => {
-              const next = [...prev];
-              const last = next[next.length - 1];
-              if (last?.role === "assistant") {
-                next[next.length - 1] = { ...last, recommendations: data.recipes };
-              }
-              return next;
-            });
+            pendingRecommendations = data.recipes;
           }
           if (parsed.event === "delta" && data.text) {
             setMessages((prev) => {
@@ -367,6 +464,19 @@ export default function RecipeChatbot({
           }
           if (parsed.event === "error") {
             throw new Error(data.error || "The assistant could not answer right now");
+          }
+          if (parsed.event === "done") {
+            const recommendations = pendingRecommendations;
+            if (recommendations && recommendations.length > 0) {
+              setMessages((prev) => {
+                const next = [...prev];
+                const last = next[next.length - 1];
+                if (last?.role === "assistant") {
+                  next[next.length - 1] = { ...last, recommendations };
+                }
+                return next;
+              });
+            }
           }
         }
       }
@@ -485,7 +595,11 @@ export default function RecipeChatbot({
                   )}
                 </AnimatePresence>
 
-                <div className="recipe-chatbot-messages">
+                <div
+                  className="recipe-chatbot-messages"
+                  ref={messagesContainerRef}
+                  onScroll={handleMessagesScroll}
+                >
                   {messages.length === 0 ? (
                     <div className="recipe-chatbot-empty">
                       <span>Ask away</span>
