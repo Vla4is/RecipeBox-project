@@ -79,7 +79,7 @@ interface AuthRequest extends Request {
   user?: { userid: string; email?: string };
 }
 
-function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
+async function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Authentication required" });
@@ -87,6 +87,11 @@ function requireAuth(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const token = header.split(" ")[1];
     const decoded = jwt.verify(token, JWT_SECRET) as { userid: string; email?: string };
+    const userRes = await pool.query(`SELECT 1 FROM users WHERE userid = $1::uuid LIMIT 1`, [decoded.userid]);
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ error: "User session is no longer valid" });
+    }
+
     req.user = decoded;
     return next();
   } catch (err) {
