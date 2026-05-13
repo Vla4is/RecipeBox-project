@@ -389,6 +389,7 @@
 }
 
 .hero-cat-pill {
+  appearance: none;
   background: rgba(255,255,255,0.1);
   border: 1px solid rgba(255,255,255,0.18);
   border-radius: 999px;
@@ -397,6 +398,7 @@
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   font-weight: 500;
+  line-height: 1.2;
   cursor: pointer;
   transition: all 0.25s;
   -webkit-backdrop-filter: blur(6px);

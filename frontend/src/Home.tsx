@@ -124,6 +124,10 @@ function parseOptionalNumber(value: string | null): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function getCategorySearchTerm(category: string): string {
+  return category.replace(/[^\p{L}\p{N}\s-]/gu, "").trim();
+}
+
 async function trackRecipeClick(recipeId: string): Promise<void> {
   const token = localStorage.getItem("jwt_token");
   
@@ -425,6 +429,14 @@ function Home() {
     window.scrollTo(0, 0);
   };
 
+  const handleHeaderCategoryClick = (category: string) => {
+    setSearchTerm(getCategorySearchTerm(category));
+    setSelectedDifficulty(null);
+    setShowSearchResults(true);
+    setIsSearchUiFocused(true);
+    scrollToRecipes();
+  };
+
   const showExpandedSearchUi = isSearchUiFocused || showSearchResults;
 
   const renderRecipeCard = (recipe: RecipeFromDB, key: string, transitionDuration = 0.4) => (
@@ -621,6 +633,17 @@ function Home() {
                 }
               }}
             />
+            <button
+              type="button"
+              className="hero-search-btn"
+              onClick={() => {
+                void runSearch();
+                setIsSearchUiFocused(false);
+                scrollToRecipes();
+              }}
+            >
+              Search
+            </button>
           </motion.div>
 
           <motion.div
@@ -694,7 +717,7 @@ function Home() {
 
             <div className="time-input-group total-time-group">
               <div className="time-input-row total-row">
-                <button className="hero-search-btn filter-clear-btn" onClick={clearFilters}>Clear</button>
+                <button type="button" className="hero-search-btn filter-clear-btn" onClick={clearFilters}>Clear</button>
               </div>
             </div>
           </motion.div>
@@ -706,15 +729,17 @@ function Home() {
             transition={{ duration: 0.6, delay: 0.9 }}
           >
             {categories.map((cat, i) => (
-              <motion.span
+              <motion.button
                 key={cat}
+                type="button"
                 className="hero-cat-pill"
+                onClick={() => handleHeaderCategoryClick(cat)}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, delay: 0.95 + i * 0.06 }}
               >
                 {cat}
-              </motion.span>
+              </motion.button>
             ))}
           </motion.div>
 
