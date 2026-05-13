@@ -38,6 +38,7 @@ type SseEvent = {
 const MARKDOWN_LINK_PATTERN = String.raw`\[([^\]\n]{1,200})\]\s*\(\s*([^\s)]+)\s*\)`;
 const LOOSE_MARKDOWN_LINK_PATTERN = String.raw`([^\[\]\n()]{2,120})\]\s*\(\s*([^\s)]+)\s*\)`;
 const BARE_LINK_PATTERN = String.raw`(https?:\/\/[^\s<>()]+|\/[A-Za-z0-9][^\s<>()]*)`;
+const LINK_SEPARATOR_PATTERN = String.raw`(?:[-:\u2013\u2014]|\u00e2\u20ac[\u201c\u201d])`;
 
 export type ChatbotContextConfig = {
   key: string;
@@ -163,7 +164,7 @@ function isSafeExternalHref(href: string): boolean {
 }
 
 function splitTrailingPunctuation(href: string): { href: string; trailing: string } {
-  const match = href.match(/^(.+?)([.,;:!?]+)?$/);
+  const match = href.match(/^(.+?)([.,;:!?]+|\u201d)?$/);
   return {
     href: match?.[1] || href,
     trailing: match?.[2] || "",
@@ -244,6 +245,40 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
   return nodes;
 }
 
+function renderRecipeLinkList(lines: string[], startIndex: number): { block: ReactNode; nextIndex: number } | null {
+  const itemPattern = new RegExp(
+    `^\\s*(?:[-*]\\s+|\\d+\\.\\s+)?(?:${MARKDOWN_LINK_PATTERN}|${LOOSE_MARKDOWN_LINK_PATTERN})\\s*(?:${LINK_SEPARATOR_PATTERN}\\s*)?(.*)$`
+  );
+  const items: ReactNode[] = [];
+  let i = startIndex;
+
+  while (i < lines.length) {
+    const match = lines[i].match(itemPattern);
+    if (!match) break;
+
+    const label = match[1] || match[3];
+    const href = match[2] || match[4];
+    const description = match[5]?.trim();
+
+    if (!label || !href) break;
+
+    items.push(
+      <li key={`rec-link-item-${i}`}>
+        {renderChatLink(label, href, `rec-link-${i}`)}
+        {description ? <> {renderInlineContent(description, `rec-link-desc-${i}`)}</> : null}
+      </li>
+    );
+    i += 1;
+  }
+
+  if (items.length === 0) return null;
+
+  return {
+    block: <ul key={`rec-link-list-${startIndex}`} className="recipe-chatbot-rich-list recipe-chatbot-rich-link-list">{items}</ul>,
+    nextIndex: i - 1,
+  };
+}
+
 function renderAssistantContent(content: string): ReactNode {
   const normalized = content
     .replace(/```+/g, "")
@@ -251,14 +286,17 @@ function renderAssistantContent(content: string): ReactNode {
     .replace(/\r/g, "\n");
   const lines = normalized.split("\n");
   const blocks: ReactNode[] = [];
-  const linkLinePattern = new RegExp(`^\\s*(?:${MARKDOWN_LINK_PATTERN}|${LOOSE_MARKDOWN_LINK_PATTERN})\\s*(?:[-–—:]\\s*)?.+`);
-  const linkItemPattern = new RegExp(`^\\s*((?:${MARKDOWN_LINK_PATTERN}|${LOOSE_MARKDOWN_LINK_PATTERN})\\s*(?:[-–—:]\\s*)?.+)`);
-
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
     const numberedMatch = line.match(/^\s*\d+\.\s+(.+)$/);
-    const linkParagraphMatch = line.match(linkLinePattern);
+    const recipeLinkList = renderRecipeLinkList(lines, i);
+
+    if (recipeLinkList) {
+      blocks.push(recipeLinkList.block);
+      i = recipeLinkList.nextIndex;
+      continue;
+    }
 
     if (bulletMatch) {
       const items: ReactNode[] = [];
@@ -291,23 +329,6 @@ function renderAssistantContent(content: string): ReactNode {
       }
       i -= 1;
       blocks.push(<ol key={`ol-${i}`} className="recipe-chatbot-rich-list">{items}</ol>);
-      continue;
-    }
-
-    if (linkParagraphMatch) {
-      const items: ReactNode[] = [];
-      while (i < lines.length) {
-        const itemMatch = lines[i].match(linkItemPattern);
-        if (!itemMatch) break;
-        items.push(
-          <li key={`rec-link-item-${i}`}>
-            {renderInlineContent(itemMatch[1], `rec-link-${i}`)}
-          </li>
-        );
-        i += 1;
-      }
-      i -= 1;
-      blocks.push(<ul key={`rec-link-list-${i}`} className="recipe-chatbot-rich-list recipe-chatbot-rich-link-list">{items}</ul>);
       continue;
     }
 
