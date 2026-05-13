@@ -227,6 +227,8 @@ function Home() {
   const searchLoadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const searchUiRef = useRef<HTMLDivElement>(null);
   const filterControlsRef = useRef<HTMLDivElement>(null);
+  const lastSyncedQueryRef = useRef(searchParams.toString());
+  const skipStateToUrlSyncRef = useRef(false);
   const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
@@ -288,6 +290,40 @@ function Home() {
   }, [searchTerm, totalTime, selectedDiet, selectedDifficulty, searchSort, showSearchResults]);
 
   useEffect(() => {
+    const currentQuery = searchParams.toString();
+    if (currentQuery === lastSyncedQueryRef.current) return;
+
+    const qParam = searchParams.get("q");
+    const totalTimeParam = parseOptionalNumber(searchParams.get("maxTotalTime"));
+    const dietParam = parseSearchDietFilter(searchParams.get("dietType"));
+    const difficultyParam = parseDifficultyFilter(searchParams.get("difficulty"));
+    const sortParamRaw = searchParams.get("sort");
+    const nextSort = parseSearchSort(sortParamRaw);
+    const hasAnyUrlFilter =
+      qParam !== null ||
+      totalTimeParam !== undefined ||
+      dietParam !== null ||
+      difficultyParam !== null ||
+      sortParamRaw !== null;
+
+    skipStateToUrlSyncRef.current = true;
+    lastSyncedQueryRef.current = currentQuery;
+    setSearchTerm(qParam ?? "");
+    setTotalTime(clamp(totalTimeParam ?? timeRanges.maxTotalTime, timeRanges.minTotalTime, timeRanges.maxTotalTime));
+    setSelectedDiet(dietParam);
+    setSelectedDifficulty(difficultyParam);
+    setSearchSort(nextSort);
+    setDisplayedSearchCount(SEARCH_INITIAL_VISIBLE);
+    setShowSearchResults(hasAnyUrlFilter);
+    setIsSearchUiFocused(hasAnyUrlFilter);
+  }, [searchParams, timeRanges.maxTotalTime, timeRanges.minTotalTime]);
+
+  useEffect(() => {
+    if (skipStateToUrlSyncRef.current) {
+      skipStateToUrlSyncRef.current = false;
+      return;
+    }
+
     const term = searchTerm.trim();
     const totalTimeFilterActive = totalTime < timeRanges.maxTotalTime;
     const dietFilterActive = selectedDiet !== null;
@@ -305,6 +341,7 @@ function Home() {
     const currentQuery = searchParams.toString();
     const nextQuery = nextParams.toString();
     if (currentQuery !== nextQuery) {
+      lastSyncedQueryRef.current = nextQuery;
       setSearchParams(nextParams, { replace: true });
     }
   }, [searchTerm, totalTime, selectedDiet, selectedDifficulty, searchSort, timeRanges.maxTotalTime, searchParams, setSearchParams]);

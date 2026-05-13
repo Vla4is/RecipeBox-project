@@ -1,53 +1,50 @@
+import { Link } from "react-router-dom";
 import "./App.css";
 
 export default function Footer() {
   return (
     <footer className="footer">
       <div className="footer-top">
-        {/* Brand */}
         <div className="footer-brand">
-          <h3 className="footer-brand-name">🍽️ RecipeBox</h3>
+          <h3 className="footer-brand-name">RecipeBox</h3>
           <p className="footer-brand-desc">
-            A thriving community where home cooks share their favorite recipes and inspire each other.
-            Cook together, share together, grow together.
+            Discover community recipes, save favorites, publish your own dishes, and find practical ideas for the
+            food you already want to cook.
           </p>
           <div className="footer-socials">
-            <a href="#" className="footer-social-link" aria-label="Facebook">f</a>
-            <a href="#" className="footer-social-link" aria-label="Instagram">📷</a>
-            <a href="#" className="footer-social-link" aria-label="Twitter">𝕏</a>
-            <a href="#" className="footer-social-link" aria-label="YouTube">▶</a>
+            <Link to="/" className="footer-social-link" aria-label="Browse recipes">R</Link>
+            <Link to="/?q=dinner" className="footer-social-link" aria-label="Dinner ideas">D</Link>
+            <Link to="/?difficulty=EASY" className="footer-social-link" aria-label="Easy recipes">E</Link>
+            <a href="mailto:support@recipebox.local" className="footer-social-link" aria-label="Email support">@</a>
           </div>
         </div>
 
-        {/* Quick Links */}
         <div className="footer-col">
           <h4 className="footer-col-title">Explore</h4>
           <ul>
-            <li><a href="#">Popular Recipes</a></li>
-            <li><a href="#">Latest from Community</a></li>
-            <li><a href="#">Top Contributors</a></li>
-            <li><a href="#">Cooking Tips</a></li>
-            <li><a href="#">Share Your Recipe</a></li>
+            <li><Link to="/">Browse Recipes</Link></li>
+            <li><Link to="/?q=turkish">Turkish Recipes</Link></li>
+            <li><Link to="/?q=pasta">Pasta Recipes</Link></li>
+            <li><Link to="/?q=salad">Salads</Link></li>
+            <li><Link to="/?q=mexican">Mexican Recipes</Link></li>
           </ul>
         </div>
 
-        {/* Categories */}
         <div className="footer-col">
-          <h4 className="footer-col-title">Categories</h4>
+          <h4 className="footer-col-title">Find Recipes</h4>
           <ul>
-            <li><a href="#">Breakfast</a></li>
-            <li><a href="#">Lunch & Dinner</a></li>
-            <li><a href="#">Desserts</a></li>
-            <li><a href="#">Vegan & Vegetarian</a></li>
-            <li><a href="#">Quick & Easy</a></li>
+            <li><Link to="/?q=breakfast">Breakfast</Link></li>
+            <li><Link to="/?q=dinner">Dinner Ideas</Link></li>
+            <li><Link to="/?q=dessert">Desserts</Link></li>
+            <li><Link to="/?dietType=VEGAN">Vegan</Link></li>
+            <li><Link to="/?difficulty=EASY">Easy Recipes</Link></li>
           </ul>
         </div>
 
-        {/* Newsletter */}
         <div className="footer-newsletter">
           <h4 className="footer-newsletter-title">Stay Connected</h4>
           <p className="footer-newsletter-desc">
-            Get weekly community recipes, cooking tips, and member spotlights delivered to your inbox.
+            Get community recipe highlights and cooking ideas. This demo form is kept local for now.
           </p>
           <form className="footer-newsletter-form" onSubmit={(e) => e.preventDefault()}>
             <input
@@ -64,12 +61,12 @@ export default function Footer() {
 
       <div className="footer-bottom">
         <p className="footer-copy">
-          © {new Date().getFullYear()} RecipeBox. Connecting home cooks worldwide with <span className="heart">♥</span>
+          © {new Date().getFullYear()} RecipeBox. Built for home cooks and shared kitchen inspiration.
         </p>
         <div className="footer-bottom-links">
-          <a href="#">Privacy Policy</a>
-          <a href="#">Terms of Service</a>
-          <a href="#">Contact Us</a>
+          <Link to="/">Browse</Link>
+          <Link to="/?dietType=VEGETARIAN">Vegetarian</Link>
+          <a href="mailto:support@recipebox.local">Contact</a>
         </div>
       </div>
     </footer>
