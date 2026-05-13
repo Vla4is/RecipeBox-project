@@ -698,16 +698,14 @@ export function Chatbot({
                 <span className="recipe-chatbot-kicker">{assistantLabel}</span>
                 <h2>{heading}</h2>
               </div>
-              {!alwaysOpen ? (
-                <button
-                  type="button"
-                  className="recipe-chatbot-icon-btn"
-                  onClick={() => setIsOpen(false)}
-                  aria-label="Close recipe assistant"
-                >
-                  ×
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="recipe-chatbot-icon-btn"
+                onClick={() => setIsOpen(false)}
+                aria-label="Close recipe assistant"
+              >
+                ×
+              </button>
             </div>
 
             <div className="recipe-chatbot-context">
