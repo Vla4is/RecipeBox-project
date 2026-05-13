@@ -341,6 +341,61 @@ export async function getSearchChatbotSessions(userId: string): Promise<ChatbotS
   }));
 }
 
+export async function getCompanionChatbotSessions(userId: string): Promise<ChatbotSession[]> {
+  await cleanupExpiredChatbotSessions();
+
+  const sessionsRes = await pool.query(
+    `SELECT sessionid, recipeid, COALESCE(context_type, 'recipe') AS context_type, title, updated_at
+     FROM chatbot_sessions
+     WHERE userid = $1::uuid
+       AND expires_at > NOW()
+     ORDER BY updated_at DESC
+     LIMIT 10`,
+    [userId]
+  );
+
+  if (sessionsRes.rows.length === 0) return [];
+
+  const sessionIds = sessionsRes.rows.map((row) => row.sessionid);
+  const messagesRes = await pool.query(
+    `SELECT sessionid, role, content, recommendations, created_at
+     FROM chatbot_messages
+     WHERE sessionid = ANY($1::uuid[])
+     ORDER BY created_at ASC`,
+    [sessionIds]
+  );
+
+  const messagesBySession = new Map<string, ChatbotMessage[]>();
+  for (const row of messagesRes.rows as Array<{
+    sessionid: string;
+    role: ChatbotRole;
+    content: string;
+    recommendations: unknown;
+    created_at: Date;
+  }>) {
+    const messages = messagesBySession.get(row.sessionid) || [];
+    const recommendations = row.role === "assistant"
+      ? normalizeStoredRecommendations(row.recommendations)
+      : undefined;
+    messages.push({
+      role: row.role,
+      content: row.content,
+      createdAt: toIso(row.created_at),
+      ...(recommendations ? { recommendations } : {}),
+    });
+    messagesBySession.set(row.sessionid, messages);
+  }
+
+  return sessionsRes.rows.map((row) => ({
+    sessionId: row.sessionid,
+    recipeId: row.recipeid,
+    contextType: row.context_type,
+    title: row.title,
+    updatedAt: toIso(row.updated_at),
+    messages: messagesBySession.get(row.sessionid) || [],
+  }));
+}
+
 export async function getAllChatbotSessions(userId: string): Promise<ChatbotHistorySession[]> {
   await cleanupExpiredChatbotSessions();
 
@@ -463,6 +518,49 @@ export async function getOrCreateSearchChatbotSession(input: {
      VALUES ($1::uuid, NULL, 'search', $2, NOW() + ($3::int * INTERVAL '1 day'))
      RETURNING sessionid`,
     [input.userId, makeSessionTitle(input.firstMessage), historyDays]
+  );
+
+  return created.rows[0].sessionid;
+}
+
+export async function getOrCreateCompanionChatbotSession(input: {
+  userId: string;
+  sessionId?: string;
+  firstMessage: string;
+  currentRecipeId?: string;
+  currentRecipeTitle?: string;
+}): Promise<string> {
+  await cleanupExpiredChatbotSessions();
+  const historyDays = getChatbotHistoryDays();
+  const hasRecipeContext = Boolean(input.currentRecipeId);
+  const contextType = hasRecipeContext ? "recipe" : "search";
+  const recipeId = input.currentRecipeId ?? null;
+  const title = input.currentRecipeTitle || makeSessionTitle(input.firstMessage);
+
+  if (input.sessionId) {
+    const existing = await pool.query(
+      `UPDATE chatbot_sessions
+       SET recipeid = $3::uuid,
+           context_type = $4,
+           title = CASE WHEN $3::uuid IS NULL THEN title ELSE $5 END,
+           expires_at = NOW() + ($6::int * INTERVAL '1 day')
+       WHERE sessionid = $1::uuid
+         AND userid = $2::uuid
+         AND expires_at > NOW()
+       RETURNING sessionid`,
+      [input.sessionId, input.userId, recipeId, contextType, title, historyDays]
+    );
+
+    if (existing.rows.length > 0) {
+      return existing.rows[0].sessionid;
+    }
+  }
+
+  const created = await pool.query(
+    `INSERT INTO chatbot_sessions (userid, recipeid, context_type, title, expires_at)
+     VALUES ($1::uuid, $2::uuid, $3, $4, NOW() + ($5::int * INTERVAL '1 day'))
+     RETURNING sessionid`,
+    [input.userId, recipeId, contextType, title, historyDays]
   );
 
   return created.rows[0].sessionid;

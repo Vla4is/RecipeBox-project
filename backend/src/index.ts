@@ -54,8 +54,10 @@ import {
   getAllChatbotSessions,
   getChatbotProviderSummary,
   getChatbotSessions,
+  getCompanionChatbotSessions,
   getGeneralChatbotSearchRecommendations,
   getOrCreateChatbotSession,
+  getOrCreateCompanionChatbotSession,
   getOrCreateSearchChatbotSession,
   getChatbotSearchRecommendations,
   getRecentChatbotMessages,
@@ -511,6 +513,128 @@ app.get("/api/chatbot/search/history", requireAuth, async (req: AuthRequest, res
     return res.json({ sessions });
   } catch (err) {
     console.error("Error fetching search chatbot history:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/chatbot/companion/history", requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isChatbotEnabled()) {
+      return res.status(404).json({ error: "Chatbot is disabled" });
+    }
+
+    const allowed = await canUseChatbot(req.user!.userid);
+    if (!allowed) {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    const sessions = await getCompanionChatbotSessions(req.user!.userid);
+    return res.json({ sessions });
+  } catch (err) {
+    console.error("Error fetching companion chatbot history:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.post("/api/chatbot/companion/messages", requireAuth, async (req: AuthRequest, res: Response) => {
+  if (!isChatbotEnabled()) {
+    return res.status(404).json({ error: "Chatbot is disabled" });
+  }
+
+  try {
+    const allowed = await canUseChatbot(req.user!.userid);
+    if (!allowed) {
+      return res.status(403).json({ error: "Premium subscription required" });
+    }
+
+    const message = normalizeChatbotMessage(req.body?.message);
+    const requestedSessionId = normalizeOptionalUuid(req.body?.sessionId);
+    const currentRecipeId = normalizeOptionalUuid(req.body?.currentRecipeId);
+    const details = currentRecipeId
+      ? await getRecipeDetails(currentRecipeId, req.user!.userid)
+      : null;
+
+    if (!message) {
+      return res.status(400).json({ error: "message is required" });
+    }
+
+    if (currentRecipeId && !details) {
+      return res.status(404).json({ error: "Recipe not found" });
+    }
+
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    const sessionId = await getOrCreateCompanionChatbotSession({
+      userId: req.user!.userid,
+      sessionId: requestedSessionId,
+      firstMessage: message,
+      currentRecipeId: details?.recipe.recipeid,
+      currentRecipeTitle: details?.recipe.title,
+    });
+
+    await saveChatbotMessage({ sessionId, role: "user", content: message });
+    const history = await getRecentChatbotMessages(sessionId);
+
+    if (details) {
+      const recommendations = await getChatbotSearchRecommendations({
+        userId: req.user!.userid,
+        message,
+        details,
+        history,
+      });
+      sendChatbotSseRecommendations(res, recommendations);
+      const providerMessages = await buildProviderMessages({ details, history, recommendations });
+      const assistantMessage = await streamChatbotCompletion({
+        messages: providerMessages,
+        res,
+        sessionId,
+      });
+
+      if (assistantMessage) {
+        await saveChatbotMessage({
+          sessionId,
+          role: "assistant",
+          content: assistantMessage,
+          recommendations,
+        });
+      }
+    } else {
+      const recommendations = await getGeneralChatbotSearchRecommendations({
+        userId: req.user!.userid,
+        message,
+        history,
+      });
+      sendChatbotSseRecommendations(res, recommendations);
+      const providerMessages = await buildGeneralProviderMessages({ message, history, recommendations });
+      const assistantMessage = await streamChatbotCompletion({
+        messages: providerMessages,
+        res,
+        sessionId,
+      });
+
+      if (assistantMessage) {
+        await saveChatbotMessage({
+          sessionId,
+          role: "assistant",
+          content: assistantMessage,
+          recommendations,
+        });
+      }
+    }
+
+    sendChatbotSseDone(res, sessionId);
+    return res.end();
+  } catch (err) {
+    console.error("Error streaming companion chatbot response:", err);
+    const message = err instanceof Error ? err.message : "The cooking assistant is unavailable right now";
+    if (res.headersSent) {
+      sendChatbotSseError(res, message);
+      return res.end();
+    }
     return res.status(500).json({ error: "Internal server error" });
   }
 });

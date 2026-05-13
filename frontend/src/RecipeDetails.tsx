@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { useParams, useNavigate, Link, useLocation } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { getRecipeDietBadge } from "./recipeDiet";
 import { getYouTubeEmbedUrl } from "./youtube";
-import RecipeChatbot from "./chatbot/RecipeChatbot";
+import { useChatbotPageContext } from "./chatbot/ChatbotPageContext";
 import "./App.css";
 
 type Recipe = {
@@ -106,8 +106,7 @@ const fadeUp = {
 export default function RecipeDetails({ onUnauthorized }: { onUnauthorized?: () => void }) {
   const { recipeId } = useParams<{ recipeId: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
-  const initialChatSessionId = new URLSearchParams(location.search).get("chatSession");
+  const { setPageContext } = useChatbotPageContext();
   const [data, setData] = useState<RecipeDetailsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -131,6 +130,16 @@ export default function RecipeDetails({ onUnauthorized }: { onUnauthorized?: () 
     if (!value) return;
     navigate(`/?q=${encodeURIComponent(value)}`);
   };
+
+  useEffect(() => {
+    if (!recipeId) return;
+
+    setPageContext({
+      key: `recipe-loading:${recipeId}`,
+      label: "Recipe",
+      title: "Loading recipe...",
+    });
+  }, [recipeId, setPageContext]);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +218,18 @@ export default function RecipeDetails({ onUnauthorized }: { onUnauthorized?: () 
       cancelled = true;
     };
   }, [recipeId]);
+
+  useEffect(() => {
+    const recipe = data?.recipe;
+    if (!recipe) return;
+
+    setPageContext({
+      key: `recipe:${recipe.recipeid}`,
+      label: "Recipe",
+      title: recipe.title,
+      currentRecipeId: recipe.recipeid,
+    });
+  }, [data?.recipe, setPageContext]);
 
   useEffect(() => {
     if (!recipeId) return;
@@ -699,12 +720,6 @@ export default function RecipeDetails({ onUnauthorized }: { onUnauthorized?: () 
           )}
         </motion.section>
       </div>
-      <RecipeChatbot
-        recipeId={recipe.recipeid}
-        recipeTitle={recipe.title}
-        initialSessionId={initialChatSessionId}
-        onUnauthorized={onUnauthorized}
-      />
     </div>
   );
 }

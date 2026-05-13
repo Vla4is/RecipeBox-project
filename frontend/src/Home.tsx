@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { motion, useMotionValue, animate } from "framer-motion";
 import { getRecipeDietBadge, parseSearchDietFilter, type SearchDietFilter } from "./recipeDiet";
 import RecipeGridCard from "./RecipeGridCard";
-import { Chatbot, type ChatbotContextConfig } from "./chatbot/RecipeChatbot";
+import { useChatbotPageContext } from "./chatbot/ChatbotPageContext";
 import "./App.css";
 
 const categories = [
@@ -179,7 +179,7 @@ function getTwoEqualRowsItems(items: RecipeFromDB[], containerWidth: number): Re
 function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
-  const initialChatSessionId = searchParams.get("chatSession");
+  const { setPageContext } = useChatbotPageContext();
   const initialHomeViewState = useMemo(() => {
     const persisted = loadHomeViewState();
     const urlParams = new URLSearchParams(window.location.search);
@@ -528,22 +528,13 @@ function Home() {
     const source = recommendedRecipes.length > 0 ? recommendedRecipes : dbRecipes;
     return source.slice(0, MAX_CAROUSEL_ITEMS);
   }, [recommendedRecipes, dbRecipes]);
-  const searchChatbotContext = useMemo<ChatbotContextConfig>(() => ({
-    key: "home-search",
-    label: "Search",
-    title: "Looking for something and not sure?",
-    historyEndpoint: "/api/chatbot/search/history",
-    messagesEndpoint: "/api/chatbot/search/messages",
-    assistantLabel: "Search assistant",
-    heading: "Find what to cook",
-    introMessage: "Tell me what you feel like eating, what ingredients you have, or how much time you want to spend.",
-    lockedTitle: "Premium search guidance",
-    lockedMessage: "Unlock recipe discovery help when you know the mood, ingredients, or time limit but not the exact recipe.",
-    unavailableMessage: "The search assistant is unavailable right now",
-    continuePlaceholder: "Keep narrowing the search...",
-    newPlaceholder: "Ask what to cook tonight...",
-    ariaLabel: "Premium search assistant",
-  }), []);
+  useEffect(() => {
+    setPageContext({
+      key: "home-search",
+      label: "Search",
+      title: "Looking for something and not sure?",
+    });
+  }, [setPageContext]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -948,7 +939,6 @@ function Home() {
           </div>
         )}
       </div>
-      <Chatbot context={searchChatbotContext} initialSessionId={initialChatSessionId} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useChatbotPageContext } from "./ChatbotPageContext";
 
 type ChatRole = "user" | "assistant";
 
@@ -39,6 +40,7 @@ const MARKDOWN_LINK_PATTERN = String.raw`\[([^\]\n]{1,200})\]\s*\(\s*([^\s)]+)\s
 const LOOSE_MARKDOWN_LINK_PATTERN = String.raw`([^\[\]\n()]{2,120})\]\s*\(\s*([^\s)]+)\s*\)`;
 const BARE_LINK_PATTERN = String.raw`(https?:\/\/[^\s<>()]+|\/[A-Za-z0-9][^\s<>()]*)`;
 const LINK_SEPARATOR_PATTERN = String.raw`(?:[-:\u2013\u2014]|\u00e2\u20ac[\u201c\u201d])`;
+const MOBILE_CHATBOT_QUERY = "(max-width: 600px)";
 
 export type ChatbotContextConfig = {
   key: string;
@@ -46,6 +48,7 @@ export type ChatbotContextConfig = {
   title: string;
   historyEndpoint: string;
   messagesEndpoint: string;
+  currentRecipeId?: string;
   assistantLabel?: string;
   heading?: string;
   introMessage?: string;
@@ -62,6 +65,14 @@ const DEFAULT_INTRO_MESSAGE =
 
 function getToken(): string | null {
   return localStorage.getItem("jwt_token");
+}
+
+function isMobileChatbotViewport(): boolean {
+  return typeof window !== "undefined" && window.matchMedia(MOBILE_CHATBOT_QUERY).matches;
+}
+
+function getInitialChatbotOpen(persistent: boolean): boolean {
+  return persistent ? !isMobileChatbotViewport() : false;
 }
 
 function formatHistoryDate(value: string): string {
@@ -351,10 +362,14 @@ export function Chatbot({
   context,
   initialSessionId,
   onUnauthorized,
+  alwaysOpen = false,
+  resetOnContextChange = true,
 }: {
   context: ChatbotContextConfig;
   initialSessionId?: string | null;
   onUnauthorized?: () => void;
+  alwaysOpen?: boolean;
+  resetOnContextChange?: boolean;
 }) {
   const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -362,7 +377,8 @@ export function Chatbot({
   const shouldAutoScrollRef = useRef(true);
   const handledInitialSessionRef = useRef<string | null>(null);
   const messagesLengthRef = useRef(0);
-  const [isOpen, setIsOpen] = useState(false);
+  const suppressSelectLatestRef = useRef(false);
+  const [isOpen, setIsOpen] = useState(() => getInitialChatbotOpen(alwaysOpen));
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -381,11 +397,11 @@ export function Chatbot({
   }, [messages.length]);
 
   useEffect(() => {
-    document.body.classList.toggle("recipe-chatbot-body-locked", isOpen);
+    document.body.classList.toggle("recipe-chatbot-body-locked", isOpen && (!alwaysOpen || isMobileChatbotViewport()));
     return () => {
       document.body.classList.remove("recipe-chatbot-body-locked");
     };
-  }, [isOpen]);
+  }, [alwaysOpen, isOpen]);
 
   const assistantLabel = context.assistantLabel || "Premium assistant";
   const heading = context.heading || "Cook smarter";
@@ -398,6 +414,7 @@ export function Chatbot({
   const ariaLabel = context.ariaLabel || "Premium cooking assistant";
 
   useEffect(() => {
+    if (!resetOnContextChange) return;
     handledInitialSessionRef.current = null;
     setIsOpen(Boolean(initialSessionId));
     setIsHistoryOpen(false);
@@ -409,7 +426,12 @@ export function Chatbot({
     setSending(false);
     setLocked(false);
     setError("");
-  }, [context.key, initialSessionId]);
+  }, [context.key, initialSessionId, resetOnContextChange]);
+
+  useEffect(() => {
+    if (!initialSessionId || handledInitialSessionRef.current === initialSessionId) return;
+    setIsOpen(true);
+  }, [initialSessionId]);
 
   const refreshHistory = useCallback(async ({
     selectLatest,
@@ -484,7 +506,7 @@ export function Chatbot({
     const shouldSelectInitial =
       initialSessionId && handledInitialSessionRef.current !== initialSessionId;
     void refreshHistory({
-      selectLatest: messagesLengthRef.current === 0 && !shouldSelectInitial,
+      selectLatest: messagesLengthRef.current === 0 && !shouldSelectInitial && !suppressSelectLatestRef.current,
       selectSessionId: shouldSelectInitial ? initialSessionId : undefined,
     });
   }, [isOpen, context.key, initialSessionId, refreshHistory]);
@@ -521,6 +543,7 @@ export function Chatbot({
   };
 
   const handleNewChat = () => {
+    suppressSelectLatestRef.current = true;
     setActiveSessionId(null);
     setMessages([]);
     setIsHistoryOpen(false);
@@ -541,6 +564,7 @@ export function Chatbot({
     setSending(true);
     setError("");
     setLocked(false);
+    suppressSelectLatestRef.current = false;
     shouldAutoScrollRef.current = true;
 
     const userMessage: ChatMessage = { role: "user", content: text };
@@ -556,6 +580,7 @@ export function Chatbot({
         body: JSON.stringify({
           message: text,
           sessionId: activeSessionId,
+          currentRecipeId: context.currentRecipeId,
         }),
       });
 
@@ -657,7 +682,7 @@ export function Chatbot({
   };
 
   return (
-    <div className="recipe-chatbot">
+    <div className={`recipe-chatbot ${alwaysOpen ? "recipe-chatbot-persistent" : ""}`}>
       <AnimatePresence>
         {isOpen && (
           <motion.section
@@ -673,14 +698,16 @@ export function Chatbot({
                 <span className="recipe-chatbot-kicker">{assistantLabel}</span>
                 <h2>{heading}</h2>
               </div>
-              <button
-                type="button"
-                className="recipe-chatbot-icon-btn"
-                onClick={() => setIsOpen(false)}
-                aria-label="Close recipe assistant"
-              >
-                ×
-              </button>
+              {!alwaysOpen ? (
+                <button
+                  type="button"
+                  className="recipe-chatbot-icon-btn"
+                  onClick={() => setIsOpen(false)}
+                  aria-label="Close recipe assistant"
+                >
+                  ×
+                </button>
+              ) : null}
             </div>
 
             <div className="recipe-chatbot-context">
@@ -860,18 +887,57 @@ export function Chatbot({
         )}
       </AnimatePresence>
 
-      <motion.button
-        type="button"
-        className="recipe-chatbot-fab"
-        onClick={() => setIsOpen((open) => !open)}
-        whileHover={{ y: -2 }}
-        whileTap={{ scale: 0.98 }}
-        aria-label={isOpen ? "Close recipe assistant" : "Open recipe assistant"}
-      >
-        <span>✦</span>
-        <strong>Ask</strong>
-      </motion.button>
+        <motion.button
+          type="button"
+          className="recipe-chatbot-fab"
+          onClick={() => setIsOpen((open) => !open)}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.98 }}
+          aria-label={isOpen ? "Close recipe assistant" : "Open recipe assistant"}
+          aria-expanded={isOpen}
+        >
+          <span>✦</span>
+          <strong>Ask</strong>
+        </motion.button>
     </div>
+  );
+}
+
+export function PersistentChatbotCompanion({ onUnauthorized }: { onUnauthorized?: () => void }) {
+  const location = useLocation();
+  const { pageContext } = useChatbotPageContext();
+  const initialSessionId = new URLSearchParams(location.search).get("chatSession");
+
+  const context = useMemo<ChatbotContextConfig>(() => ({
+    key: pageContext.key,
+    label: pageContext.label,
+    title: pageContext.title,
+    currentRecipeId: pageContext.currentRecipeId,
+    historyEndpoint: "/api/chatbot/companion/history",
+    messagesEndpoint: "/api/chatbot/companion/messages",
+    assistantLabel: pageContext.currentRecipeId ? "Recipe assistant" : "Search assistant",
+    heading: pageContext.currentRecipeId ? "Cook this recipe" : "Find what to cook",
+    introMessage: pageContext.currentRecipeId
+      ? DEFAULT_INTRO_MESSAGE
+      : "Tell me what you feel like eating, what ingredients you have, or how much time you want to spend.",
+    lockedTitle: pageContext.currentRecipeId ? "Premium cooking guidance" : "Premium search guidance",
+    lockedMessage: pageContext.currentRecipeId
+      ? "Unlock recipe-aware tips, substitutions, and timing help while you cook."
+      : "Unlock recipe discovery help when you know the mood, ingredients, or time limit but not the exact recipe.",
+    unavailableMessage: "The assistant is unavailable right now",
+    continuePlaceholder: pageContext.currentRecipeId ? "Ask about this recipe..." : "Keep narrowing the search...",
+    newPlaceholder: pageContext.currentRecipeId ? "Ask about this recipe..." : "Ask what to cook tonight...",
+    ariaLabel: "Persistent cooking assistant",
+  }), [pageContext]);
+
+  return (
+    <Chatbot
+      context={context}
+      initialSessionId={initialSessionId}
+      onUnauthorized={onUnauthorized}
+      alwaysOpen
+      resetOnContextChange={false}
+    />
   );
 }
 

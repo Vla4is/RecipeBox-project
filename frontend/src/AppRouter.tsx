@@ -17,6 +17,8 @@ import MyProfile from "./MyProfile";
 import PublicProfile from "./PublicProfile";
 import ChatHistory from "./ChatHistory";
 import { getTokenExpiryMs, isTokenExpired } from "./auth";
+import { ChatbotPageContextProvider } from "./chatbot/ChatbotPageContext";
+import { PersistentChatbotCompanion } from "./chatbot/RecipeChatbot";
 
 const SCROLL_POSITIONS_KEY = "itsystems_scroll_positions_v1";
 
@@ -117,59 +119,62 @@ export default function AppRouter() {
 
   return (
     <BrowserRouter>
-      <ScrollRestorationManager />
-      <Navbar loggedIn={!!token} onLogout={handleLogout} />
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/register" element={
-          <RequireLoggedOut loggedIn={!!token}>
-            <RegistrationForm />
-          </RequireLoggedOut>
-        } />
-        <Route path="/login" element={
-          <RequireLoggedOut loggedIn={!!token}>
-            <LoginForm onLogin={handleLogin} />
-          </RequireLoggedOut>
-        } />
-        <Route path="/add-recipe" element={
-          <RequireAuth loggedIn={!!token}>
-            <AddRecipe token={token!} onUnauthorized={handleLogout} />
-          </RequireAuth>
-        } />
-        <Route path="/my-recipes" element={
-          <RequireAuth loggedIn={!!token}>
-            <MyRecipes token={token!} onUnauthorized={handleLogout} />
-          </RequireAuth>
-        } />
-        <Route path="/my-profile" element={
-          <RequireAuth loggedIn={!!token}>
-            <MyProfile token={token!} onUnauthorized={handleLogout} />
-          </RequireAuth>
-        } />
-        <Route path="/chat-history" element={
-          <RequireAuth loggedIn={!!token}>
-            <ChatHistory token={token!} onUnauthorized={handleLogout} />
-          </RequireAuth>
-        } />
-        <Route path="/edit-recipe/:recipeId" element={
-          <RequireAuth loggedIn={!!token}>
-            <EditRecipe token={token!} onUnauthorized={handleLogout} />
-          </RequireAuth>
-        } />
-        <Route path="/premium" element={
-          <RequireAuth loggedIn={!!token}>
-            <Premium />
-          </RequireAuth>
-        } />
-        <Route path="/billing" element={
-          <RequireAuth loggedIn={!!token}>
-            <Billing />
-          </RequireAuth>
-        } />
-        <Route path="/recipes/:recipeId" element={<RecipeDetails onUnauthorized={handleLogout} />} />
-        <Route path="/:nickname" element={<PublicProfile />} />
-      </Routes>
-      <Footer />
+      <ChatbotPageContextProvider>
+        <ScrollRestorationManager />
+        <Navbar loggedIn={!!token} onLogout={handleLogout} />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/register" element={
+            <RequireLoggedOut loggedIn={!!token}>
+              <RegistrationForm />
+            </RequireLoggedOut>
+          } />
+          <Route path="/login" element={
+            <RequireLoggedOut loggedIn={!!token}>
+              <LoginForm onLogin={handleLogin} />
+            </RequireLoggedOut>
+          } />
+          <Route path="/add-recipe" element={
+            <RequireAuth loggedIn={!!token}>
+              <AddRecipe token={token!} onUnauthorized={handleLogout} />
+            </RequireAuth>
+          } />
+          <Route path="/my-recipes" element={
+            <RequireAuth loggedIn={!!token}>
+              <MyRecipes token={token!} onUnauthorized={handleLogout} />
+            </RequireAuth>
+          } />
+          <Route path="/my-profile" element={
+            <RequireAuth loggedIn={!!token}>
+              <MyProfile token={token!} onUnauthorized={handleLogout} />
+            </RequireAuth>
+          } />
+          <Route path="/chat-history" element={
+            <RequireAuth loggedIn={!!token}>
+              <ChatHistory token={token!} onUnauthorized={handleLogout} />
+            </RequireAuth>
+          } />
+          <Route path="/edit-recipe/:recipeId" element={
+            <RequireAuth loggedIn={!!token}>
+              <EditRecipe token={token!} onUnauthorized={handleLogout} />
+            </RequireAuth>
+          } />
+          <Route path="/premium" element={
+            <RequireAuth loggedIn={!!token}>
+              <Premium />
+            </RequireAuth>
+          } />
+          <Route path="/billing" element={
+            <RequireAuth loggedIn={!!token}>
+              <Billing />
+            </RequireAuth>
+          } />
+          <Route path="/recipes/:recipeId" element={<RecipeDetails onUnauthorized={handleLogout} />} />
+          <Route path="/:nickname" element={<PublicProfile />} />
+        </Routes>
+        <Footer />
+        <PersistentChatbotCompanion onUnauthorized={handleLogout} />
+      </ChatbotPageContextProvider>
     </BrowserRouter>
   );
 }
