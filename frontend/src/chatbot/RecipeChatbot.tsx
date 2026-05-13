@@ -35,8 +35,9 @@ type SseEvent = {
   data: string;
 };
 
-const RECIPE_LINK_PATTERN = String.raw`\[([^\]\n]+)\]\s*\(\s*((?:https?:\/\/[^)\s]+)?\/recipes\/[A-Za-z0-9-]+)\s*\)`;
-const LOOSE_RECIPE_LINK_PATTERN = String.raw`(?:\[([^\]\n]+)\]|([^\[\]\n()]{2,120})\])\s*\(\s*((?:https?:\/\/[^)\s]+)?\/recipes\/[A-Za-z0-9-]+)\s*\)`;
+const MARKDOWN_LINK_PATTERN = String.raw`\[([^\]\n]{1,200})\]\s*\(\s*([^\s)]+)\s*\)`;
+const LOOSE_MARKDOWN_LINK_PATTERN = String.raw`([^\[\]\n()]{2,120})\]\s*\(\s*([^\s)]+)\s*\)`;
+const BARE_LINK_PATTERN = String.raw`(https?:\/\/[^\s<>()]+|\/[A-Za-z0-9][^\s<>()]*)`;
 
 export type ChatbotContextConfig = {
   key: string;
@@ -131,14 +132,66 @@ function smilieToEmoji(value: string): string {
   }
 }
 
-function normalizeRecipeHref(href: string): string {
-  if (href.startsWith("/")) return href;
+function normalizeChatLinkHref(href: string): string {
+  const normalizedHref = href.trim().replace(/^["']|["']$/g, "");
+  if (normalizedHref.startsWith("/") && !normalizedHref.startsWith("//")) return normalizedHref;
   try {
-    const url = new URL(href);
+    const url = new URL(normalizedHref);
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
-    return href;
+    return normalizedHref;
   }
+}
+
+function isInternalChatHref(href: string): boolean {
+  if (href.startsWith("/") && !href.startsWith("//")) return true;
+
+  try {
+    return typeof window !== "undefined" && new URL(href).origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+function isSafeExternalHref(href: string): boolean {
+  try {
+    const protocol = new URL(href).protocol;
+    return protocol === "http:" || protocol === "https:" || protocol === "mailto:" || protocol === "tel:";
+  } catch {
+    return false;
+  }
+}
+
+function splitTrailingPunctuation(href: string): { href: string; trailing: string } {
+  const match = href.match(/^(.+?)([.,;:!?]+)?$/);
+  return {
+    href: match?.[1] || href,
+    trailing: match?.[2] || "",
+  };
+}
+
+function renderChatLink(label: string, href: string, key: string): ReactNode {
+  const cleanedLabel = label.trim().replace(/^[\s,.;:–—-]+/, "");
+  const cleanedHref = href.trim().replace(/^["']|["']$/g, "");
+
+  if (isInternalChatHref(cleanedHref)) {
+    const to = normalizeChatLinkHref(cleanedHref);
+    return (
+      <Link key={key} to={to} className="recipe-chatbot-inline-link">
+        {cleanedLabel || to}
+      </Link>
+    );
+  }
+
+  if (isSafeExternalHref(cleanedHref)) {
+    return (
+      <a key={key} href={cleanedHref} className="recipe-chatbot-inline-link" target="_blank" rel="noreferrer">
+        {cleanedLabel || cleanedHref}
+      </a>
+    );
+  }
+
+  return cleanedLabel || cleanedHref;
 }
 
 function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
@@ -153,16 +206,8 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
     .replace(/\\\)/g, ")")
     .replace(/\\\//g, "/");
 
-  // Convert bare recipe paths into markdown links unless they are already inside parentheses.
-  const plainPathRegex = /(?:https?:\/\/[^)\s]+)?\/recipes\/[0-9a-fA-F-]{36}/g;
-  safeContent = safeContent.replace(plainPathRegex, (match, offset, str) => {
-    const prevChar = str[offset - 1];
-    if (prevChar === "(") return match; // already part of markdown link
-    return `[${match}](${match})`;
-  });
-
   const inlinePattern = new RegExp(
-    `${LOOSE_RECIPE_LINK_PATTERN}|(\\*\\*([^*\\n]+)\\*\\*)|(\\*([^*\\n]+)\\*)|(<3|:-?\\)|:-?\\(|;-?\\)|:-?D)`,
+    `(${MARKDOWN_LINK_PATTERN})|(${LOOSE_MARKDOWN_LINK_PATTERN})|(${BARE_LINK_PATTERN})|(\\*\\*([^*\\n]+)\\*\\*)|(\\*([^*\\n]+)\\*)|(<3|:-?\\)|:-?\\(|;-?\\)|:-?D)`,
     "g"
   );
   let lastIndex = 0;
@@ -173,18 +218,20 @@ function renderInlineContent(content: string, keyPrefix: string): ReactNode[] {
       nodes.push(safeContent.slice(lastIndex, match.index));
     }
 
-    if ((match[1] || match[2]) && match[3]) {
-      nodes.push(
-        <Link key={`${keyPrefix}-link-${match.index}`} to={normalizeRecipeHref(match[3])} className="recipe-chatbot-inline-link">
-          {(match[1] || match[2]).trim().replace(/^[\s,.;:–—-]+/, "")}
-        </Link>
-      );
-    } else if (match[5]) {
-      nodes.push(<strong key={`${keyPrefix}-bold-${match.index}`}>{match[5]}</strong>);
-    } else if (match[7]) {
-      nodes.push(<em key={`${keyPrefix}-italic-${match.index}`}>{match[7]}</em>);
+    if (match[2] && match[3]) {
+      nodes.push(renderChatLink(match[2], match[3], `${keyPrefix}-link-${match.index}`));
+    } else if (match[5] && match[6]) {
+      nodes.push(renderChatLink(match[5], match[6], `${keyPrefix}-loose-link-${match.index}`));
     } else if (match[8]) {
-      nodes.push(smilieToEmoji(match[8]));
+      const { href, trailing } = splitTrailingPunctuation(match[8]);
+      nodes.push(renderChatLink(href, href, `${keyPrefix}-bare-link-${match.index}`));
+      if (trailing) nodes.push(trailing);
+    } else if (match[10]) {
+      nodes.push(<strong key={`${keyPrefix}-bold-${match.index}`}>{match[10]}</strong>);
+    } else if (match[12]) {
+      nodes.push(<em key={`${keyPrefix}-italic-${match.index}`}>{match[12]}</em>);
+    } else if (match[13]) {
+      nodes.push(smilieToEmoji(match[13]));
     }
 
     lastIndex = inlinePattern.lastIndex;
@@ -204,14 +251,14 @@ function renderAssistantContent(content: string): ReactNode {
     .replace(/\r/g, "\n");
   const lines = normalized.split("\n");
   const blocks: ReactNode[] = [];
-  const recipeLinkLinePattern = new RegExp(`^\\s*${RECIPE_LINK_PATTERN}\\s*(?:[-–—:]\\s*)?.+`);
-  const recipeLinkItemPattern = new RegExp(`^\\s*(${RECIPE_LINK_PATTERN}\\s*(?:[-–—:]\\s*)?.+)`);
+  const linkLinePattern = new RegExp(`^\\s*(?:${MARKDOWN_LINK_PATTERN}|${LOOSE_MARKDOWN_LINK_PATTERN})\\s*(?:[-–—:]\\s*)?.+`);
+  const linkItemPattern = new RegExp(`^\\s*((?:${MARKDOWN_LINK_PATTERN}|${LOOSE_MARKDOWN_LINK_PATTERN})\\s*(?:[-–—:]\\s*)?.+)`);
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const bulletMatch = line.match(/^\s*[-*]\s+(.+)$/);
     const numberedMatch = line.match(/^\s*\d+\.\s+(.+)$/);
-    const recipeLinkParagraphMatch = line.match(recipeLinkLinePattern);
+    const linkParagraphMatch = line.match(linkLinePattern);
 
     if (bulletMatch) {
       const items: ReactNode[] = [];
@@ -247,10 +294,10 @@ function renderAssistantContent(content: string): ReactNode {
       continue;
     }
 
-    if (recipeLinkParagraphMatch) {
+    if (linkParagraphMatch) {
       const items: ReactNode[] = [];
       while (i < lines.length) {
-        const itemMatch = lines[i].match(recipeLinkItemPattern);
+        const itemMatch = lines[i].match(linkItemPattern);
         if (!itemMatch) break;
         items.push(
           <li key={`rec-link-item-${i}`}>
@@ -737,7 +784,7 @@ export function Chatbot({
                                 key={recipe.recipeId}
                                 type="button"
                                 className="recipe-chatbot-rec-card"
-                                onClick={() => navigate(recipe.href)}
+                                onClick={() => navigate(normalizeChatLinkHref(recipe.href))}
                               >
                                 {recipe.imageUrl ? (
                                   <img src={recipe.imageUrl} alt="" />
